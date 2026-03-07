@@ -25,10 +25,10 @@ const exportCSV = async (req, res) => {
       });
     }
 
-    if (task.status !== 'completed' || !task.results) {
+    if (!task.results || task.results.length === 0) {
       return res.status(400).json({
         success: false,
-        error: { code: 'TASK_NOT_COMPLETED', message: 'Task not completed yet' }
+        error: { code: 'NO_RESULTS', message: 'No results available for export' }
       });
     }
 
@@ -107,10 +107,10 @@ const exportExcel = async (req, res) => {
       });
     }
 
-    if (task.status !== 'completed' || !task.results) {
+    if (!task.results || task.results.length === 0) {
       return res.status(400).json({
         success: false,
-        error: { code: 'TASK_NOT_COMPLETED', message: 'Task not completed yet' }
+        error: { code: 'NO_RESULTS', message: 'No results available for export' }
       });
     }
 
@@ -233,10 +233,10 @@ const exportPDF = async (req, res) => {
       });
     }
 
-    if (task.status !== 'completed' || !task.results) {
+    if (!task.results || task.results.length === 0) {
       return res.status(400).json({
         success: false,
-        error: { code: 'TASK_NOT_COMPLETED', message: 'Task not completed yet' }
+        error: { code: 'NO_RESULTS', message: 'No results available for export' }
       });
     }
 
