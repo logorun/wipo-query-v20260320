@@ -28,16 +28,6 @@ const validateTrademark = (name) => {
     return { valid: false, reason: 'Trademark name too long (max 100 characters)' };
   }
 
-  // 检查是否只包含允许的字符
-  const validPattern = /^[a-zA-Z0-9\s\-_\.]+$/;
-  if (!validPattern.test(trimmed)) {
-    return { 
-      valid: false, 
-      reason: 'Trademark name contains invalid characters (only letters, numbers, spaces, hyphens, underscores, and dots allowed)'
-    };
-  }
-
-  // 检查是否为纯数字
   if (/^\d+$/.test(trimmed)) {
     return { valid: false, reason: 'Trademark name cannot be only numbers' };
   }
@@ -48,7 +38,7 @@ const validateTrademark = (name) => {
 /**
  * 批量验证商标列表
  */
-const validateTrademarkBatch = (trademarks, maxBatchSize = 50) => {
+const validateTrademarkBatch = (trademarks, maxBatchSize = 1000) => {
   if (!Array.isArray(trademarks)) {
     return { valid: false, reason: 'Trademarks must be an array' };
   }

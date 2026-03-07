@@ -1,5 +1,6 @@
 const API_BASE = 'http://95.134.250.48:3000/api/v1';
 const API_KEY = 'logotestkey';
+const HEALTH_URL = 'http://95.134.250.48:3000/health';
 
 class WipoAPI {
     async request(endpoint, options = {}) {
@@ -38,29 +39,51 @@ class WipoAPI {
     async getTask(taskId) {
         return this.request(`/tasks/${taskId}`);
     }
-    }
-
-    async getTasks(status = 'all', limit = 50) {
-        const params = new URLSearchParams({ status, limit });
-        return this.request(\`/tasks?\${params}\`);
-    }
-
-    async getTask(taskId) {
-        return this.request(\`/tasks/\${taskId}\`);
-    }
 
     async submitTask(trademarks) {
-        const trademarkList = trademarks.split(',').map(t => t.trim()).filter(t => t);
+        let trademarkList;
+        if (Array.isArray(trademarks)) {
+            trademarkList = trademarks.map(t => t.trim()).filter(t => t);
+        } else {
+            trademarkList = trademarks.split(',').map(t => t.trim()).filter(t => t);
+        }
         return this.request('/tasks', {
             method: 'POST',
             body: JSON.stringify({ trademarks: trademarkList })
         });
     }
 
+    async extractFromExcel(fileContent, fileName) {
+        return this.request('/extract/excel', {
+            method: 'POST',
+            body: JSON.stringify({ fileContent, fileName })
+        });
+    }
+
+    async extractFromData(data, fileName) {
+        return this.request('/extract/data', {
+            method: 'POST',
+            body: JSON.stringify({ data, fileName })
+        });
+    }
+
+    async startTask(taskId) {
+        return this.request(`/tasks/${taskId}/start`, { method: 'POST' });
+    }
+
+    async pauseTask(taskId) {
+        return this.request(`/tasks/${taskId}/pause`, { method: 'POST' });
+    }
+
+    async deleteTask(taskId) {
+        return this.request(`/tasks/${taskId}/delete`, { method: 'DELETE' });
+    }
+
     async health() {
         try {
-            await this.request('/health');
-            return true;
+            const response = await fetch(HEALTH_URL);
+            const data = await response.json();
+            return data.status === 'healthy';
         } catch {
             return false;
         }

@@ -317,6 +317,17 @@ const taskDB = {
     } catch (err) {
       logger.error('Failed to mark task as failed', { id, error: err.message });
     }
+  },
+
+  delete: async (id) => {
+    try {
+      const result = await run('DELETE FROM tasks WHERE id = ?', [id]);
+      logger.debug('Task deleted', { id, changes: result.changes });
+      return { deleted: result.changes > 0 };
+    } catch (error) {
+      logger.error('Failed to delete task', { id, error: error.message });
+      throw error;
+    }
   }
 };
 

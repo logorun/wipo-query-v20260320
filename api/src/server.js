@@ -11,6 +11,7 @@ const exportRoutes = require('./routes/export');
 const webhookRoutes = require('./routes/webhooks');
 const adminRoutes = require('./routes/admin');
 const bulkImportRoutes = require('./routes/bulkImport');
+const extractRoutes = require('./routes/extract');
 const { 
   errorHandler, 
   notFoundHandler, 
@@ -38,7 +39,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'X-API-Key']
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 // 日志和指标
 app.use(requestLogger);
@@ -212,6 +213,7 @@ app.use(`/api/${config.server.apiVersion}/tasks`, taskRoutes);
 app.use(`/api/${config.server.apiVersion}/cache`, cacheRoutes);
 app.use(`/api/${config.server.apiVersion}/export`, exportRoutes);
 app.use(`/api/${config.server.apiVersion}/bulk-import`, bulkImportRoutes);
+app.use(`/api/${config.server.apiVersion}/extract`, extractRoutes);
 app.use(`/api/${config.server.apiVersion}`, webhookRoutes);
 app.use(`/api/${config.server.apiVersion}/admin`, adminRoutes);
 

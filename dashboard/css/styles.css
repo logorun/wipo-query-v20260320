@@ -52,3 +52,17 @@
 table tbody tr:hover {
     background: rgba(255, 255, 255, 0.05);
 }
+
+#statusChart,
+#dailyChart {
+    max-height: 300px;
+    height: 300px !important;
+    position: relative;
+}
+
+#statusChart canvas,
+#dailyChart canvas {
+    max-height: 300px !important;
+    height: 300px !important;
+    width: 100% !important;
+}

@@ -31,10 +31,28 @@ router.get('/:taskId',
   taskController.getStatus
 );
 
-// DELETE /api/v1/tasks/:taskId - 取消任务
+// DELETE /api/v1/tasks/:taskId - 删除任务（硬删除）
 router.delete('/:taskId', 
   validateTaskId,
-  taskController.cancel
+  taskController.delete
+);
+
+// POST /api/v1/tasks/:taskId/start - 开始任务
+router.post('/:taskId/start', 
+  validateTaskId,
+  taskController.start
+);
+
+// POST /api/v1/tasks/:taskId/pause - 暂停任务
+router.post('/:taskId/pause', 
+  validateTaskId,
+  taskController.pause
+);
+
+// DELETE /api/v1/tasks/:taskId/delete - 删除任务
+router.delete('/:taskId/delete', 
+  validateTaskId,
+  taskController.delete
 );
 
 module.exports = router;

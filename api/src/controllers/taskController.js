@@ -139,16 +139,45 @@ const taskController = {
       }
       response.results = task.results || [];
       
-      if (task.status === 'processing' && task.results) {
-        const completedTrademarks = task.results.map(r => r.trademark);
-        const pendingTrademarks = task.trademarks.filter(t => !completedTrademarks.includes(t));
-        response.processingStatus = {
-          completed: completedTrademarks.length,
-          pending: pendingTrademarks.length,
-          completedTrademarks: completedTrademarks,
-          pendingTrademarks: pendingTrademarks
-        };
+      // 构建每个商标的处理状态映射
+      const processingStatus = {};
+      
+      // 首先将所有商标标记为 pending
+      task.trademarks.forEach(tm => {
+        processingStatus[tm] = 'pending';
+      });
+      
+      // 然后根据 results 更新状态
+      if (task.results && task.results.length > 0) {
+        task.results.forEach(result => {
+          const tm = result.trademark || result.brandName;
+          if (tm && processingStatus[tm] !== undefined) {
+            // worker 使用 queryStatus 字段: 'found', 'not_found', 'error', 'skipped'
+            processingStatus[tm] = result.queryStatus !== 'error' ? 'completed' : 'failed';
+          }
+        });
       }
+      
+      // 如果有正在处理的商标，检查队列状态
+      if (task.status === 'processing') {
+        const completedCount = Object.values(processingStatus).filter(s => s === 'completed').length;
+        const failedCount = Object.values(processingStatus).filter(s => s === 'failed').length;
+        const pendingCount = task.trademarks.length - completedCount - failedCount;
+        
+        // 将部分 pending 标记为 processing（假设正在处理第一个 pending 的）
+        if (pendingCount > 0) {
+          let foundProcessing = false;
+          for (const tm of task.trademarks) {
+            if (processingStatus[tm] === 'pending' && !foundProcessing) {
+              processingStatus[tm] = 'processing';
+              foundProcessing = true;
+              break;
+            }
+          }
+        }
+      }
+      
+      response.processingStatus = processingStatus;
     }
 
     if (task.status === 'pending') {
@@ -296,6 +325,110 @@ const taskController = {
         status: 'cancelled',
         message: 'Task cancelled successfully'
       }
+    });
+  }),
+
+  // Start a paused task
+  start: asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(taskId)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_TASK_ID', message: 'Invalid task ID format' }
+      });
+    }
+
+    const task = await taskDB.getById(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'TASK_NOT_FOUND', message: `Task with ID '${taskId}' not found` }
+      });
+    }
+
+    if (task.status !== 'paused') {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          code: 'CANNOT_START', 
+          message: `Cannot start task with status '${task.status}'. Only paused tasks can be started.` 
+        }
+      });
+    }
+
+    await taskDB.updateStatus(taskId, 'pending');
+
+    res.json({
+      success: true,
+      data: { id: taskId, status: 'pending', message: 'Task started successfully' }
+    });
+  }),
+
+  // Pause a pending/processing task
+  pause: asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(taskId)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_TASK_ID', message: 'Invalid task ID format' }
+      });
+    }
+
+    const task = await taskDB.getById(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'TASK_NOT_FOUND', message: `Task with ID '${taskId}' not found` }
+      });
+    }
+
+    if (task.status !== 'pending' && task.status !== 'processing') {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          code: 'CANNOT_PAUSE', 
+          message: `Cannot pause task with status '${task.status}'.` 
+        }
+      });
+    }
+
+    await taskDB.updateStatus(taskId, 'paused');
+
+    res.json({
+      success: true,
+      data: { id: taskId, status: 'paused', message: 'Task paused successfully' }
+    });
+  }),
+
+  // Delete a task
+  delete: asyncHandler(async (req, res) => {
+    const { taskId } = req.params;
+    
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidRegex.test(taskId)) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_TASK_ID', message: 'Invalid task ID format' }
+      });
+    }
+
+    const task = await taskDB.getById(taskId);
+    if (!task) {
+      return res.status(404).json({
+        success: false,
+        error: { code: 'TASK_NOT_FOUND', message: `Task with ID '${taskId}' not found` }
+      });
+    }
+
+    await taskDB.delete(taskId);
+
+    res.json({
+      success: true,
+      data: { id: taskId, message: 'Task deleted successfully' }
     });
   })
 };

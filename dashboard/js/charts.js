@@ -5,7 +5,8 @@ class DashboardCharts {
     }
 
     renderStatusChart(tasks) {
-        const ctx = document.getElementById('statusChart').getContext('2d');
+        const canvas = document.getElementById('statusChart');
+        const ctx = canvas.getContext('2d');
         const counts = {
             completed: tasks.filter(t => t.status === 'completed').length,
             processing: tasks.filter(t => t.status === 'processing').length,
@@ -26,13 +27,19 @@ class DashboardCharts {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } }
+                plugins: { 
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { color: '#94a3b8', padding: 15 } 
+                    } 
+                }
             }
         });
     }
 
     renderDailyChart(tasks) {
-        const ctx = document.getElementById('dailyChart').getContext('2d');
+        const canvas = document.getElementById('dailyChart');
+        const ctx = canvas.getContext('2d');
         const dailyData = {};
         tasks.forEach(task => {
             const date = new Date(task.createdAt).toLocaleDateString('zh-CN');

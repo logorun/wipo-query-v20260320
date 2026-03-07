@@ -126,7 +126,8 @@ class TaskDrawer {
 
   async loadTask(taskId) {
     try {
-      const task = await api.getTask(taskId);
+      const response = await api.getTask(taskId);
+      const task = response.data || response;
       this.updateUI(task);
     } catch (error) {
       console.error('Failed to load task:', error);
@@ -139,7 +140,8 @@ class TaskDrawer {
       this.cleanup();
     }
 
-    this.cleanup = api.pollTask(taskId, (task) => {
+    this.cleanup = api.pollTask(taskId, (response) => {
+      const task = response.data || response;
       this.updateUI(task);
     }, 3000);
   }
@@ -151,7 +153,9 @@ class TaskDrawer {
       pending: { text: '待处理', class: 'bg-yellow-500/20 text-yellow-400' },
       processing: { text: '处理中', class: 'bg-blue-500/20 text-blue-400' },
       completed: { text: '已完成', class: 'bg-green-500/20 text-green-400' },
-      failed: { text: '失败', class: 'bg-red-500/20 text-red-400' }
+      failed: { text: '失败', class: 'bg-red-500/20 text-red-400' },
+      paused: { text: '已暂停', class: 'bg-orange-500/20 text-orange-400' },
+      cancelled: { text: '已取消', class: 'bg-slate-500/20 text-slate-400' }
     };
     const config = statusConfig[task.status] || statusConfig.pending;
     this.elements.statusBadge.className = `px-3 py-1 rounded-full text-sm ${config.class}`;
@@ -167,41 +171,76 @@ class TaskDrawer {
     this.elements.progressText.textContent = `${progress}%`;
     this.elements.progressCount.textContent = `${completed + failed}/${total}`;
 
-    this.updateLogs(processingStatus, task.trademarks || []);
+    this.updateLogs(processingStatus, task.trademarks || [], task.results || []);
 
     if (task.results && task.results.length > 0) {
       this.updateResults(task.results);
     }
   }
 
-  updateLogs(processingStatus, trademarks) {
+  updateLogs(processingStatus, trademarks, results) {
     if (!trademarks || trademarks.length === 0) {
       this.elements.logs.innerHTML = '<p class="text-slate-500 text-center py-8">暂无日志</p>';
       return;
     }
 
-    const logsHtml = trademarks.map((trademark, index) => {
-      const status = processingStatus[trademark] || 'pending';
+    const queryStatusMap = {};
+    if (results && results.length > 0) {
+      results.forEach(result => {
+        const tm = result.trademark || result.brandName;
+        if (tm) {
+          queryStatusMap[tm] = result.queryStatus;
+        }
+      });
+    }
+
+    const logsHtml = trademarks.map((trademark) => {
+      const processingState = processingStatus[trademark] || 'pending';
+      const queryState = queryStatusMap[trademark];
+      
+      let displayStatus, displayText, statusColor;
+      
+      if (processingState === 'processing') {
+        displayStatus = 'processing';
+        displayText = '处理中';
+        statusColor = 'text-blue-400';
+      } else if (processingState === 'pending') {
+        displayStatus = 'pending';
+        displayText = '等待中';
+        statusColor = 'text-slate-500';
+      } else if (processingState === 'completed' || processingState === 'failed') {
+        const isError = queryState === 'error' || queryState === 'skipped';
+        const isSuccess = queryState === 'found' || queryState === 'not_found';
+        
+        if (isError) {
+          displayStatus = 'failed';
+          displayText = '失败';
+          statusColor = 'text-red-400';
+        } else if (isSuccess) {
+          displayStatus = 'success';
+          displayText = '成功';
+          statusColor = 'text-green-400';
+        } else {
+          displayStatus = processingState === 'completed' ? 'success' : 'failed';
+          displayText = processingState === 'completed' ? '已完成' : '失败';
+          statusColor = processingState === 'completed' ? 'text-green-400' : 'text-red-400';
+        }
+      }
+
       const statusIcons = {
-        completed: '<span class="text-green-400">✓</span>',
+        success: '<span class="text-green-400">✓</span>',
         failed: '<span class="text-red-400">✗</span>',
         processing: '<span class="text-blue-400 animate-spin">⟳</span>',
         pending: '<span class="text-slate-500">○</span>'
-      };
-      const statusText = {
-        completed: '已完成',
-        failed: '失败',
-        processing: '处理中',
-        pending: '等待中'
       };
 
       return `
         <div class="flex items-center justify-between py-2 px-3 rounded-lg bg-slate-800/50">
           <div class="flex items-center gap-3">
-            <span class="w-6 h-6 flex items-center justify-center">${statusIcons[status]}</span>
+            <span class="w-6 h-6 flex items-center justify-center">${statusIcons[displayStatus]}</span>
             <span class="text-slate-300">${trademark}</span>
           </div>
-          <span class="text-sm ${status === 'completed' ? 'text-green-400' : status === 'failed' ? 'text-red-400' : status === 'processing' ? 'text-blue-400' : 'text-slate-500'}">${statusText[status]}</span>
+          <span class="text-sm ${statusColor}">${displayText}</span>
         </div>
       `;
     }).join('');
@@ -216,8 +255,23 @@ class TaskDrawer {
     }
 
     const resultsHtml = results.map((result, index) => {
-      const hasData = result.status === 'success' && result.data;
       const brandName = result.brandName || result.trademark || '未知商标';
+      const queryStatus = result.queryStatus || 'error';
+      const hasRecords = result.records && result.records.length > 0;
+      
+      let statusBadge, statusClass;
+      if (queryStatus === 'error' || queryStatus === 'skipped') {
+        statusBadge = '失败';
+        statusClass = 'bg-red-500/20 text-red-400';
+      } else if (queryStatus === 'not_found' || !hasRecords) {
+        statusBadge = '无结果';
+        statusClass = 'bg-yellow-500/20 text-yellow-400';
+      } else {
+        statusBadge = '成功';
+        statusClass = 'bg-green-500/20 text-green-400';
+      }
+
+      const logsContent = this.renderResultLogs(result);
 
       return `
         <div class="border border-slate-700 rounded-lg overflow-hidden">
@@ -225,17 +279,14 @@ class TaskDrawer {
             <div class="flex items-center gap-3">
               <span class="text-slate-400">#${index + 1}</span>
               <span class="text-white font-medium">${brandName}</span>
-              ${result.status === 'success' 
-                ? '<span class="px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400">成功</span>'
-                : '<span class="px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400">失败</span>'
-              }
+              <span class="px-2 py-0.5 rounded text-xs ${statusClass}">${statusBadge}</span>
             </div>
             <svg id="card-icon-${index}" class="w-5 h-5 text-slate-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
             </svg>
           </button>
           <div id="card-content-${index}" class="hidden px-4 py-3 bg-slate-800/30 border-t border-slate-700">
-            ${hasData ? this.renderResultData(result.data) : `<p class="text-red-400 text-sm">${result.error || '查询失败'}</p>`}
+            ${logsContent}
           </div>
         </div>
       `;
@@ -244,32 +295,46 @@ class TaskDrawer {
     this.elements.results.innerHTML = resultsHtml;
   }
 
-  renderResultData(data) {
-    if (!data) return '<p class="text-slate-500 text-sm">无数据</p>';
-
-    if (data.summary) {
-      return `
-        <div class="space-y-2 text-sm">
-          ${data.summary.total !== undefined ? `<p class="text-slate-300">总记录数: <span class="text-white">${data.summary.total}</span></p>` : ''}
-          ${data.summary.exactMatches !== undefined ? `<p class="text-slate-300">完全匹配: <span class="text-white">${data.summary.exactMatches}</span></p>` : ''}
-          ${data.summary.similarMatches !== undefined ? `<p class="text-slate-300">相似匹配: <span class="text-white">${data.summary.similarMatches}</span></p>` : ''}
-          ${data.summary.status ? `<p class="text-slate-300">状态: <span class="text-white">${data.summary.status}</span></p>` : ''}
-        </div>
-      `;
+  renderResultLogs(result) {
+    const parts = [];
+    
+    if (result.queryTime) {
+      parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">查询时间:</span> <span class="text-white">${new Date(result.queryTime).toLocaleString()}</span></p>`);
     }
-
-    if (data.hits !== undefined) {
-      return `<p class="text-slate-300 text-sm">匹配数: <span class="text-white">${data.hits}</span></p>`;
+    
+    if (result.queryStatus) {
+      parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">查询状态:</span> <span class="text-white">${result.queryStatus}</span></p>`);
     }
-
-    const entries = Object.entries(data).slice(0, 5);
-    return `
-      <div class="space-y-1 text-sm">
-        ${entries.map(([key, value]) => `
-          <p class="text-slate-300"><span class="text-slate-500">${key}:</span> <span class="text-white">${typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : value}</span></p>
-        `).join('')}
-      </div>
-    `;
+    
+    if (result.fromCache !== undefined) {
+      parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">来自缓存:</span> <span class="text-white">${result.fromCache ? '是' : '否'}</span></p>`);
+    }
+    
+    if (result.records && Array.isArray(result.records)) {
+      parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">记录数量:</span> <span class="text-white">${result.records.length}</span></p>`);
+    }
+    
+    if (result.error) {
+      parts.push(`<p class="text-red-400 text-sm mt-2"><span class="text-slate-500">错误信息:</span> ${result.error}</p>`);
+    }
+    
+    if (result.records && result.records.length > 0) {
+      const recordPreview = result.records.slice(0, 3).map((record, i) => 
+        `<div class="mt-2 p-2 bg-slate-700/50 rounded text-xs">
+          <p class="text-slate-400">记录 #${i + 1}</p>
+          ${Object.entries(record).slice(0, 4).map(([key, value]) => 
+            `<p class="text-slate-300"><span class="text-slate-500">${key}:</span> ${typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : String(value).slice(0, 50)}</p>`
+          ).join('')}
+        </div>`
+      ).join('');
+      parts.push(recordPreview);
+      
+      if (result.records.length > 3) {
+        parts.push(`<p class="text-slate-500 text-xs mt-2">还有 ${result.records.length - 3} 条记录未显示...</p>`);
+      }
+    }
+    
+    return parts.length > 0 ? parts.join('') : '<p class="text-slate-500 text-sm">无详细信息</p>';
   }
 
   toggleCard(index) {
