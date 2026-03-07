@@ -1,9 +1,13 @@
 const xlsx = require('xlsx');
+const { v4: uuidv4 } = require('uuid');
 const aiService = require('../services/aiService');
+const { taskDB } = require('../models/database');
+const { addTaskToQueue } = require('../services/queueService');
 const { Logger } = require('../utils/logger');
 const { asyncHandler } = require('../middleware/errorHandler');
 
 const logger = new Logger('extractController');
+const BATCH_SIZE = 250;
 
 const extractController = {
   extractFromExcel: asyncHandler(async (req, res) => {
@@ -110,9 +114,74 @@ const extractController = {
         });
       }
 
+      // Auto-split if more than BATCH_SIZE trademarks
+      if (trademarks.length > BATCH_SIZE) {
+        logger.info('Auto-splitting large upload', {
+          fileName,
+          totalTrademarks: trademarks.length,
+          batchSize: BATCH_SIZE
+        });
+
+        const batches = [];
+        const totalBatches = Math.ceil(trademarks.length / BATCH_SIZE);
+        
+        for (let i = 0; i < totalBatches; i++) {
+          const start = i * BATCH_SIZE;
+          const end = start + BATCH_SIZE;
+          const batchTrademarks = trademarks.slice(start, end);
+          
+          const taskId = uuidv4();
+          const task = {
+            id: taskId,
+            trademarks: batchTrademarks.map(t => t.trim().toUpperCase()),
+            status: 'pending',
+            priority: 5,
+            callbackUrl: null,
+            userId: req.user?.id || null,
+            orgId: req.user?.orgId || null,
+            planType: req.user?.plan || 'free',
+            metadata: JSON.stringify({
+              batchIndex: i,
+              totalBatches: totalBatches,
+              sourceFile: fileName
+            })
+          };
+
+          await taskDB.create(task);
+          await addTaskToQueue(taskId, task.trademarks, task.priority);
+
+          batches.push({
+            taskId,
+            batchIndex: i,
+            trademarkCount: batchTrademarks.length,
+            status: 'pending'
+          });
+
+          logger.info('Created batch task', {
+            taskId,
+            batchIndex: i,
+            totalBatches,
+            trademarkCount: batchTrademarks.length
+          });
+        }
+
+        return res.json({
+          success: true,
+          data: {
+            needsSplit: true,
+            fileName,
+            totalTrademarks: trademarks.length,
+            batchCount: totalBatches,
+            tasks: batches
+          }
+        });
+      }
+
+      // No split needed - return existing response format
       res.json({
         success: true,
         data: {
+          needsSplit: false,
           fileName,
           totalRows: data.length,
           extractedCount: trademarks.length,

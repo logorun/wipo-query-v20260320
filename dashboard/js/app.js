@@ -297,7 +297,26 @@ async function handleFileSelect(event) {
         
         const result = await api.extractFromData(jsonData, file.name);
         
-        if (result.success && result.data.trademarks.length > 0) {
+        if (!result.success) {
+            alert('未能从文件中提取到商标，请检查文件格式');
+            event.target.value = '';
+            return;
+        }
+
+        // Handle auto-split response
+        if (result.data.needsSplit === true) {
+            const taskList = result.data.tasks.map(t => 
+                `任务 ${t.batchIndex + 1}/${result.data.batchCount}: ${t.trademarkCount} 个商标 (ID: ${t.taskId.slice(0, 8)}...) `
+            ).join('\n');
+            
+            alert(`文件已成功分割为 ${result.data.batchCount} 个任务:\n\n${taskList}\n\n所有任务已自动创建并加入队列。`);
+            await refreshData();
+            event.target.value = '';
+            return;
+        }
+
+        // No split needed - show trademark selection modal
+        if (result.data.trademarks && result.data.trademarks.length > 0) {
             extractedTrademarks = result.data.trademarks;
             selectedTrademarks = new Set(extractedTrademarks);
             showTrademarkConfirmationModal(result.data);
