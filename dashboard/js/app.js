@@ -22,8 +22,9 @@ async function initDashboard() {
 async function refreshData() {
     try {
         const response = await api.getTasks(currentFilter, 100);
-        allTasks = response.tasks || [];
-        updateStats();
+        const data = response.data || response;
+        allTasks = data.tasks || [];
+        updateStats(data);
         updateTaskList();
         charts.renderStatusChart(allTasks);
         charts.renderDailyChart(allTasks);
@@ -32,11 +33,18 @@ async function refreshData() {
     }
 }
 
-function updateStats() {
-    document.getElementById('stat-total').textContent = allTasks.length;
-    document.getElementById('stat-completed').textContent = allTasks.filter(t => t.status === 'completed').length;
-    document.getElementById('stat-processing').textContent = allTasks.filter(t => t.status === 'processing').length;
-    document.getElementById('stat-failed').textContent = allTasks.filter(t => t.status === 'failed').length;
+function updateStats(data) {
+    if (data && data.total !== undefined) {
+        document.getElementById('stat-total').textContent = data.total;
+        document.getElementById('stat-completed').textContent = data.completed || 0;
+        document.getElementById('stat-processing').textContent = data.processing || 0;
+        document.getElementById('stat-failed').textContent = data.failed || 0;
+    } else {
+        document.getElementById('stat-total').textContent = allTasks.length;
+        document.getElementById('stat-completed').textContent = allTasks.filter(t => t.status === 'completed').length;
+        document.getElementById('stat-processing').textContent = allTasks.filter(t => t.status === 'processing').length;
+        document.getElementById('stat-failed').textContent = allTasks.filter(t => t.status === 'failed').length;
+    }
 }
 
 function updateTaskList() {
