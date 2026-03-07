@@ -258,6 +258,130 @@ const exportPDF = async (req, res) => {
   }
 };
 
+// 批量导出功能
+const exportBatch = async (req, res) => {
+  try {
+    const { taskIds, filter } = req.body;
+    
+    // 验证请求参数
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          code: 'INVALID_REQUEST', 
+          message: 'taskIds must be a non-empty array' 
+        }
+      });
+    }
+    
+    // 验证 filter 参数（如果提供）
+    if (filter && !['eu', 'non-eu'].includes(filter)) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          code: 'INVALID_FILTER', 
+          message: 'Filter must be one of: eu, non-eu' 
+        }
+      });
+    }
+
+    // 获取所有任务结果
+    const allRecords = [];
+    
+    for (const taskId of taskIds) {
+      const task = await taskDB.getById(taskId);
+      
+      if (!task) {
+        return res.status(404).json({
+          success: false,
+          error: { 
+            code: 'TASK_NOT_FOUND', 
+            message: `Task with ID ${taskId} not found` 
+          }
+        });
+      }
+      
+      if (!task.results || task.results.length === 0) {
+        // 跳过没有结果的任务
+        continue;
+      }
+      
+      // 处理任务中的每个结果
+      for (const result of task.results) {
+        for (const record of result.records || []) {
+          // 应用筛选条件
+          if (filter === 'eu' && !record.isEU) continue;
+          if (filter === 'non-eu' && record.isEU) continue;
+          
+          allRecords.push({
+            '查询商标': result.trademark,
+            '品牌名称': record.brandName || '',
+            '持有人': record.owner || '',
+            '状态': record.status || '',
+            '国家/地区': record.country || '',
+            '国家代码': record.countryCode || '',
+            '注册号': record.regNumber || '',
+            '注册日期': record.regDate || '',
+            '尼斯分类': (record.niceClasses || []).join(', '),
+            '是否欧盟': record.isEU ? '是' : '否',
+            '是否国际注册': record.isInternational ? '是' : '否',
+            '是否展开记录': record.isExpanded ? '是' : '否',
+            '任务ID': taskId,
+            '查询时间': result.queryTime
+          });
+        }
+      }
+    }
+    
+    // 检查是否有数据
+    if (allRecords.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { 
+          code: 'NO_DATA', 
+          message: 'No data available for export after applying filters' 
+        }
+      });
+    }
+    
+    // 创建工作簿
+    const wb = xlsx.utils.book_new();
+    
+    // 详细结果表
+    const wsDetails = xlsx.utils.json_to_sheet(allRecords);
+    wsDetails['!cols'] = [
+      {wch: 15}, {wch: 20}, {wch: 40}, {wch: 20}, 
+      {wch: 30}, {wch: 10}, {wch: 15}, {wch: 15}, 
+      {wch: 20}, {wch: 10}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 20}
+    ];
+    xlsx.utils.book_append_sheet(wb, wsDetails, '详细结果');
+    
+    // 生成文件名
+    const excelFilename = `wipo-trademark-batch-export-${Date.now()}-${allRecords.length}-records.xlsx`;
+    const outputDir = getOutputDir();
+    const filepath = path.join(outputDir, excelFilename);
+    
+    // 保存文件
+    xlsx.writeFile(wb, filepath);
+    
+    // 发送文件
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${excelFilename}"`);
+    
+    const fileStream = fs.createReadStream(filepath);
+    fileStream.pipe(res);
+    
+    logger.info('Batch export completed', { taskIds, filter, filepath, records: allRecords.length });
+    
+  } catch (error) {
+    logger.error('Batch export failed', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: { code: 'EXPORT_FAILED', message: error.message }
+    });
+  }
+};
+
 // 主导出路由处理
 const exportTask = async (req, res) => {
   const { format = 'excel' } = req.query;
@@ -285,5 +409,6 @@ module.exports = {
   exportTask,
   exportCSV,
   exportExcel,
-  exportPDF
+  exportPDF,
+  exportBatch
 };
