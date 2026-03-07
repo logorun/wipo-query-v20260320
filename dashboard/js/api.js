@@ -1,4 +1,4 @@
-const API_BASE = 'https://true-clouds-scream.loca.lt/api/v1';
+const API_BASE = 'http://95.134.250.48:3000/api/v1';
 const API_KEY = 'logotestkey';
 
 class WipoAPI {
