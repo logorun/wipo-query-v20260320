@@ -40,23 +40,42 @@ function updateStats() {
 }
 
 function updateTaskList() {
-    const tbody = document.getElementById('task-list');
-    tbody.innerHTML = '';
-    const filteredTasks = currentFilter === 'all' ? allTasks : allTasks.filter(t => t.status === currentFilter);
-    filteredTasks.slice(0, 20).forEach(task => {
-        const row = document.createElement('tr');
-        row.className = 'border-b border-slate-800';
-        const statusClass = \`status-\${task.status}\`;
-        const statusText = { completed: '已完成', processing: '处理中', pending: '待处理', failed: '失败' }[task.status] || task.status;
-        row.innerHTML = \`
-            <td class="py-3 font-mono text-sm">\${task.id.slice(0, 8)}...</td>
-            <td class="py-3">\${task.trademarks?.join(', ') || '-'}</td>
-            <td class="py-3"><span class="status-badge \${statusClass}">\${statusText}</span></td>
-            <td class="py-3 text-sm">\${new Date(task.createdAt).toLocaleString('zh-CN')}</td>
-            <td class="py-3"><button onclick="viewTask('\${task.id}')" class="text-blue-400 hover:text-blue-300 text-sm">查看</button></td>
-        \`;
-        tbody.appendChild(row);
-    });
+  const tbody = document.getElementById('task-list');
+  tbody.innerHTML = '';
+  const filteredTasks = currentFilter === 'all' ? allTasks : allTasks.filter(t => t.status === currentFilter);
+  
+  filteredTasks.slice(0, 20).forEach(task => {
+    const row = document.createElement('tr');
+    row.className = 'border-b border-slate-800 cursor-pointer hover:bg-slate-800/50 transition';
+    
+    const statusClass = `status-${task.status}`;
+    const statusText = { completed: '已完成', processing: '处理中', pending: '待处理', failed: '失败' }[task.status] || task.status;
+    
+    // Calculate progress
+    const progress = task.progress || {};
+    const percent = progress.total ? Math.round((progress.processed / progress.total) * 100) : 0;
+    
+    row.innerHTML = `
+      <td class="py-3 font-mono text-sm">${task.id.slice(0, 8)}...</td>
+      <td class="py-3">${task.trademarks?.length || 0}个</td>
+      <td class="py-3">
+        <div class="flex items-center gap-2">
+          <div class="w-24 h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div class="h-full bg-gradient-to-r from-cyan-500 to-green-500 transition-all" style="width: ${percent}%"></div>
+          </div>
+          <span class="text-xs text-slate-400">${percent}%</span>
+        </div>
+      </td>
+      <td class="py-3"><span class="status-badge ${statusClass}">${statusText}</span></td>
+      <td class="py-3 text-sm">${new Date(task.createdAt).toLocaleString('zh-CN')}</td>
+      <td class="py-3"><button onclick="event.stopPropagation(); viewTask('${task.id}')" class="text-cyan-400 hover:text-cyan-300 text-sm">查看</button></td>
+    `;
+    
+    // Click row to open drawer
+    row.addEventListener('click', () => viewTask(task.id));
+    
+    tbody.appendChild(row);
+  });
 }
 
 async function submitTask() {
@@ -73,13 +92,12 @@ async function submitTask() {
     }
 }
 
-async function viewTask(taskId) {
-    try {
-        const task = await api.getTask(taskId);
-        alert(JSON.stringify(task, null, 2));
-    } catch (error) {
-        alert('获取任务详情失败');
-    }
+function viewTask(taskId) {
+  if (typeof drawer !== 'undefined') {
+    drawer.open(taskId);
+  } else {
+    console.error('Drawer not initialized');
+  }
 }
 
 document.getElementById('status-filter')?.addEventListener('change', (e) => {
