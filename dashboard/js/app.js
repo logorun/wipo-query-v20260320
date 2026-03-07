@@ -55,6 +55,14 @@ function updateStats(data) {
         document.getElementById('stat-processing').textContent = allTasks.filter(t => t.status === 'processing').length;
         document.getElementById('stat-failed').textContent = allTasks.filter(t => t.status === 'failed').length;
     }
+    
+    // Trademark stats
+    const tmStats = data.trademarkStats || {};
+    document.getElementById('stat-tm-total').textContent = tmStats.total || 0;
+    document.getElementById('stat-tm-processed').textContent = tmStats.processed || 0;
+    document.getElementById('stat-tm-pending').textContent = tmStats.pending || 0;
+    document.getElementById('stat-tm-eu').textContent = tmStats.euRecords || 0;
+    document.getElementById('stat-tm-noneu').textContent = tmStats.nonEuRecords || 0;
 }
 
 function updateTaskList() {
