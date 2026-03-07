@@ -32,9 +32,11 @@ app.locals.startTime = Date.now();
 setupGlobalErrorHandlers();
 
 // 中间件
-if (config.cors.enabled) {
-  app.use(cors({ origin: config.cors.origins }));
-}
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'X-API-Key']
+}));
 
 app.use(express.json());
 

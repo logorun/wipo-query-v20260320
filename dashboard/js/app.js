@@ -21,15 +21,25 @@ async function initDashboard() {
 
 async function refreshData() {
     try {
+        console.log('[DEBUG] Fetching tasks...');
         const response = await api.getTasks(currentFilter, 100);
+        console.log('[DEBUG] API response:', response);
         const data = response.data || response;
+        console.log('[DEBUG] Extracted data:', data);
         allTasks = data.tasks || [];
+        console.log('[DEBUG] allTasks:', allTasks.length, 'items');
         updateStats(data);
         updateTaskList();
-        charts.renderStatusChart(allTasks);
-        charts.renderDailyChart(allTasks);
+        if (typeof charts !== 'undefined') {
+            charts.renderStatusChart(allTasks);
+            charts.renderDailyChart(allTasks);
+        } else {
+            console.warn('[DEBUG] charts object not defined');
+        }
     } catch (error) {
         console.error('Failed to refresh:', error);
+        document.getElementById('api-status').textContent = 'API Error';
+        document.getElementById('api-status').className = 'px-3 py-1 rounded-full text-sm bg-red-500/20 text-red-400';
     }
 }
 
