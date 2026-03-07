@@ -1,0 +1,38 @@
+/* Glass effect for cards */
+.glass {
+  background: rgba(30, 41, 59, 0.7);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Custom scrollbar for drawer content */
+#drawer-results::-webkit-scrollbar,
+#drawer-logs::-webkit-scrollbar {
+  width: 6px;
+}
+#drawer-results::-webkit-scrollbar-track,
+#drawer-logs::-webkit-scrollbar-track {
+  background: rgba(30, 41, 59, 0.5);
+}
+#drawer-results::-webkit-scrollbar-thumb,
+#drawer-logs::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 3px;
+}
+
+/* Progress bar animation */
+#drawer-progress-bar {
+  background: linear-gradient(90deg, #06b6d4, #10b981);
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+}
+
+/* Status badge hover effects */
+.status-badge {
+  transition: all 0.2s ease;
+}
+
+/* Card hover effect */
+.result-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.1);
+}
