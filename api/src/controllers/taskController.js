@@ -249,6 +249,34 @@ const taskController = {
       taskDB.getStats()
     ]);
 
+    // Calculate real trademark statistics
+    const allTasks = await taskDB.list({ limit: 10000 });
+    const trademarkStats = {
+      total: 0,
+      processed: 0,
+      pending: 0,
+      euRecords: 0,
+      nonEuRecords: 0
+    };
+
+    for (const task of allTasks) {
+      trademarkStats.total += task.trademarks?.length || 0;
+      
+      if (task.status === 'completed' || task.status === 'processing') {
+        trademarkStats.processed += task.progress_processed || 0;
+        trademarkStats.pending += (task.trademarks?.length || 0) - (task.progress_processed || 0);
+        
+        if (task.results) {
+          for (const result of task.results) {
+            trademarkStats.euRecords += result.euRecords || 0;
+            trademarkStats.nonEuRecords += result.nonEURecords || 0;
+          }
+        }
+      } else if (task.status === 'pending') {
+        trademarkStats.pending += task.trademarks?.length || 0;
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -257,6 +285,7 @@ const taskController = {
         processing: stats.processing,
         completed: stats.completed,
         failed: stats.failed,
+        trademarkStats: trademarkStats,
         tasks: tasks.map(t => ({
           id: t.id,
           status: t.status,
