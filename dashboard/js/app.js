@@ -249,7 +249,14 @@ async function batchExport() {
   }
   
   const taskIds = Array.from(selectedTasks);
-  const filter = currentFilter !== 'all' ? currentFilter : undefined;
+  
+  // 显示确认对话框，让用户选择导出模式
+  const message = '请选择批量导出模式：\n\n' +
+    '"确定" - 全部（包含未抓取的商标）\n' +
+    '"取消" - 仅有结果（只导出有查询结果的商标）';
+  
+  const exportAll = confirm(message);
+  const filter = exportAll ? 'all' : 'results-only';
   
   try {
     const blob = await api.batchExport(taskIds, filter);
@@ -261,7 +268,7 @@ async function batchExport() {
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
-    alert(`已导出 ${taskIds.length} 个任务的数据`);
+    alert(`已导出 ${taskIds.length} 个任务的数据（${exportAll ? '全部' : '仅有结果'}）`);
   } catch (error) {
     alert('批量导出失败: ' + error.message);
   }

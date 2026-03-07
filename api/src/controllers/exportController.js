@@ -1,8 +1,6 @@
 const { taskDB } = require('../models/database');
-const { parseReportFilename, getOutputDir } = require('../utils/filename');
+const { parseReportFilename } = require('../utils/filename');
 const xlsx = require('xlsx');
-const fs = require('fs');
-const path = require('path');
 const { Logger } = require('../utils/logger');
 const logger = new Logger('export');
 
@@ -275,12 +273,12 @@ const exportBatch = async (req, res) => {
     }
     
     // 验证 filter 参数（如果提供）
-    if (filter && !['eu', 'non-eu'].includes(filter)) {
+    if (filter && !['all', 'results-only'].includes(filter)) {
       return res.status(400).json({
         success: false,
         error: { 
           code: 'INVALID_FILTER', 
-          message: 'Filter must be one of: eu, non-eu' 
+          message: 'Filter must be one of: all, results-only' 
         }
       });
     }
@@ -292,43 +290,84 @@ const exportBatch = async (req, res) => {
       const task = await taskDB.getById(taskId);
       
       if (!task) {
-        return res.status(404).json({
-          success: false,
-          error: { 
-            code: 'TASK_NOT_FOUND', 
-            message: `Task with ID ${taskId} not found` 
-          }
-        });
-      }
-      
-      if (!task.results || task.results.length === 0) {
-        // 跳过没有结果的任务
         continue;
       }
       
-      // 处理任务中的每个结果
-      for (const result of task.results) {
-        for (const record of result.records || []) {
-          // 应用筛选条件
-          if (filter === 'eu' && !record.isEU) continue;
-          if (filter === 'non-eu' && record.isEU) continue;
+      const resultsMap = new Map();
+      if (task.results && task.results.length > 0) {
+        for (const result of task.results) {
+          resultsMap.set(result.trademark, result);
+        }
+      }
+      
+      if (filter === 'results-only') {
+        if (!task.results || task.results.length === 0) {
+          continue;
+        }
+        
+        for (const result of task.results) {
+          for (const record of result.records || []) {
+            allRecords.push({
+              '查询商标': result.trademark,
+              '品牌名称': record.brandName || '',
+              '持有人': record.owner || '',
+              '状态': record.status || '',
+              '国家/地区': record.country || '',
+              '国家代码': record.countryCode || '',
+              '注册号': record.regNumber || '',
+              '注册日期': record.regDate || '',
+              '尼斯分类': (record.niceClasses || []).join(', '),
+              '是否欧盟': record.isEU ? '是' : '否',
+              '是否国际注册': record.isInternational ? '是' : '否',
+              '是否展开记录': record.isExpanded ? '是' : '否',
+              '任务ID': taskId,
+              '查询时间': result.queryTime
+            });
+          }
+        }
+      } else {
+        const trademarks = task.trademarks || [];
+        
+        for (const trademark of trademarks) {
+          const result = resultsMap.get(trademark);
           
-          allRecords.push({
-            '查询商标': result.trademark,
-            '品牌名称': record.brandName || '',
-            '持有人': record.owner || '',
-            '状态': record.status || '',
-            '国家/地区': record.country || '',
-            '国家代码': record.countryCode || '',
-            '注册号': record.regNumber || '',
-            '注册日期': record.regDate || '',
-            '尼斯分类': (record.niceClasses || []).join(', '),
-            '是否欧盟': record.isEU ? '是' : '否',
-            '是否国际注册': record.isInternational ? '是' : '否',
-            '是否展开记录': record.isExpanded ? '是' : '否',
-            '任务ID': taskId,
-            '查询时间': result.queryTime
-          });
+          if (result && result.records && result.records.length > 0) {
+            for (const record of result.records || []) {
+              allRecords.push({
+                '查询商标': trademark,
+                '品牌名称': record.brandName || '',
+                '持有人': record.owner || '',
+                '状态': record.status || '',
+                '国家/地区': record.country || '',
+                '国家代码': record.countryCode || '',
+                '注册号': record.regNumber || '',
+                '注册日期': record.regDate || '',
+                '尼斯分类': (record.niceClasses || []).join(', '),
+                '是否欧盟': record.isEU ? '是' : '否',
+                '是否国际注册': record.isInternational ? '是' : '否',
+                '是否展开记录': record.isExpanded ? '是' : '否',
+                '任务ID': taskId,
+                '查询时间': result.queryTime
+              });
+            }
+          } else {
+            allRecords.push({
+              '查询商标': trademark,
+              '品牌名称': '暂未抓取',
+              '持有人': '暂未抓取',
+              '状态': '暂未抓取',
+              '国家/地区': '暂未抓取',
+              '国家代码': '暂未抓取',
+              '注册号': '暂未抓取',
+              '注册日期': '暂未抓取',
+              '尼斯分类': '暂未抓取',
+              '是否欧盟': '暂未抓取',
+              '是否国际注册': '暂未抓取',
+              '是否展开记录': '暂未抓取',
+              '任务ID': taskId,
+              '查询时间': '暂未抓取'
+            });
+          }
         }
       }
     }
@@ -344,34 +383,24 @@ const exportBatch = async (req, res) => {
       });
     }
     
-    // 创建工作簿
     const wb = xlsx.utils.book_new();
-    
-    // 详细结果表
     const wsDetails = xlsx.utils.json_to_sheet(allRecords);
     wsDetails['!cols'] = [
       {wch: 15}, {wch: 20}, {wch: 40}, {wch: 20}, 
       {wch: 30}, {wch: 10}, {wch: 15}, {wch: 15}, 
       {wch: 20}, {wch: 10}, {wch: 15}, {wch: 15}, {wch: 15}, {wch: 20}
     ];
-    xlsx.utils.book_append_sheet(wb, wsDetails, '详细结果');
+    xlsx.utils.book_append_sheet(wb, wsDetails, '合并结果');
     
-    // 生成文件名
     const excelFilename = `wipo-trademark-batch-export-${Date.now()}-${allRecords.length}-records.xlsx`;
-    const outputDir = getOutputDir();
-    const filepath = path.join(outputDir, excelFilename);
-    
-    // 保存文件
-    xlsx.writeFile(wb, filepath);
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
     
     // 发送文件
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${excelFilename}"`);
+    res.send(buffer);
     
-    const fileStream = fs.createReadStream(filepath);
-    fileStream.pipe(res);
-    
-    logger.info('Batch export completed', { taskIds, filter, filepath, records: allRecords.length });
+    logger.info('Batch export completed', { taskIds, filter, records: allRecords.length });
     
   } catch (error) {
     logger.error('Batch export failed', { error: error.message });
