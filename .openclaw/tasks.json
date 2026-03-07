@@ -1,0 +1,108 @@
+{
+  "project": "wipo-trademark-batch",
+  "description": "用八爪鱼架构完善 WIPO 商标批量查询工具",
+  "version": "3.0.0",
+  "created_at": "2026-03-05T06:30:00+08:00",
+  "tasks": [
+    {
+      "id": "task-001",
+      "description": "批量测试40个商标并生成报告",
+      "type": "test",
+      "files": ["test/batch-test-40.js", "output/batch-test-results.json"],
+      "dependencies": [],
+      "status": "pending",
+      "priority": 1,
+      "estimated_time": "20分钟",
+      "note": "之前虚报完成，已修正"
+    },
+    {
+      "id": "task-002",
+      "description": "实现批量导出功能 (CSV/Excel)",
+      "type": "feature",
+      "files": ["api/src/routes/export.js", "api/src/controllers/exportController.js"],
+      "dependencies": [],
+      "status": "completed",
+      "priority": 2,
+      "estimated_time": "30分钟",
+      "completed_at": "2026-03-05T06:38:00+08:00"
+    },
+    {
+      "id": "task-003",
+      "description": "实现 Webhook 回调通知",
+      "type": "feature",
+      "files": ["api/src/services/webhookService.js", "api/src/routes/webhooks.js"],
+      "dependencies": [],
+      "status": "completed",
+      "priority": 3,
+      "estimated_time": "25分钟",
+      "completed_at": "2026-03-05T14:45:00+08:00"
+    },
+    {
+      "id": "task-004",
+      "description": "实现限流控制 (Rate Limiting)",
+      "type": "feature",
+      "files": ["api/src/middleware/rateLimiter.js", "api/src/config/index.js", "api/src/server.js", "api/src/routes/tasks.js"],
+      "dependencies": [],
+      "status": "completed",
+      "priority": 4,
+      "estimated_time": "20分钟",
+      "completed_at": "2026-03-04T22:35:00+08:00"
+    },
+    {
+      "id": "task-005",
+      "description": "创建部署文档和脚本",
+      "type": "docs",
+      "files": ["docs/DEPLOYMENT.md", "scripts/deploy.sh", "docker-compose.yml", "scripts/backup.sh"],
+      "dependencies": [],
+      "status": "completed",
+      "priority": 5,
+      "estimated_time": "30分钟",
+      "completed_at": "2026-03-05T06:36:00+08:00"
+    },
+    {
+      "id": "task-006",
+      "description": "完善前端管理界面",
+      "type": "frontend",
+      "files": ["api/public/app.js", "api/public/index.html", "api/public/styles.css"],
+      "dependencies": [],
+      "status": "completed",
+      "priority": 6,
+      "estimated_time": "40分钟",
+      "started_at": "2026-03-05T06:34:00+08:00",
+      "completed_at": "2026-03-05T14:31:00+08:00"
+    },
+    {
+      "id": "task-007",
+      "description": "实现查询统计报表",
+      "type": "feature",
+      "files": ["api/src/routes/admin.js", "api/src/services/statsService.js"],
+      "dependencies": [],
+      "status": "pending",
+      "priority": 7,
+      "estimated_time": "25分钟",
+      "note": "之前虚报完成，已修正"
+    },
+    {
+      "id": "task-008",
+      "description": "Redis 持久化配置",
+      "type": "config",
+      "files": ["redis.conf", "scripts/setup-redis.sh", "api/.env.example", "api/ecosystem.config.js"],
+      "dependencies": [],
+      "status": "completed",
+      "priority": 8,
+      "estimated_time": "15分钟",
+      "completed_at": "2026-03-04T22:35:00+08:00"
+    },
+    {
+      "id": "task-009",
+      "description": "API 端到端完整测试",
+      "type": "test",
+      "files": ["test/integration.test.js", "test/e2e.test.js"],
+      "dependencies": [],
+      "status": "pending",
+      "priority": 9,
+      "estimated_time": "35分钟",
+      "note": "之前虚报完成，已修正"
+    }
+  ]
+}

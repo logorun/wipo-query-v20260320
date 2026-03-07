@@ -1,0 +1,139 @@
+{
+  "generatedAt": "2026-03-06T10:36:00Z",
+  "summary": {
+    "totalRoutes": 14,
+    "matched": 4,
+    "gaps": 10,
+    "byType": {
+      "MISSING_CONTROLLER_FILE": 1,
+      "INLINE_CONTROLLER": 9,
+      "UNREGISTERED_ROUTE": 1
+    }
+  },
+  "gaps": [
+    {
+      "type": "MISSING_CONTROLLER_FILE",
+      "route": "GET /api/v1/export/:taskId",
+      "expectedController": "exportController.exportTask",
+      "actualStatus": "exportController.js file not found",
+      "severity": "high",
+      "suggestion": "Create api/src/controllers/exportController.js with exportTask method"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "POST /api/v1/webhooks",
+      "expectedController": "webhookService.registerWebhook",
+      "actualStatus": "inline function in route file",
+      "severity": "medium",
+      "suggestion": "Extract to api/src/controllers/webhookController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "GET /api/v1/webhooks",
+      "expectedController": "webhookService.listWebhooks",
+      "actualStatus": "inline function in route file",
+      "severity": "medium",
+      "suggestion": "Extract to api/src/controllers/webhookController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "DELETE /api/v1/webhooks/:id",
+      "expectedController": "webhookService.deleteWebhook",
+      "actualStatus": "inline function in route file",
+      "severity": "medium",
+      "suggestion": "Extract to api/src/controllers/webhookController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "POST /api/v1/webhooks/test",
+      "expectedController": "inline (test webhook)",
+      "actualStatus": "inline function in route file",
+      "severity": "medium",
+      "suggestion": "Extract to api/src/controllers/webhookController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "GET /api/v1/admin/health",
+      "expectedController": "performHealthCheck",
+      "actualStatus": "inline function in route file",
+      "severity": "low",
+      "suggestion": "Extract to api/src/controllers/adminController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "GET /api/v1/admin/metrics",
+      "expectedController": "metrics.getStats",
+      "actualStatus": "inline function in route file",
+      "severity": "low",
+      "suggestion": "Extract to api/src/controllers/adminController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "GET /api/v1/admin/alerts",
+      "expectedController": "getAlertHistory",
+      "actualStatus": "inline function in route file",
+      "severity": "low",
+      "suggestion": "Extract to api/src/controllers/adminController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "DELETE /api/v1/admin/alerts",
+      "expectedController": "clearAlertHistory",
+      "actualStatus": "inline function in route file",
+      "severity": "low",
+      "suggestion": "Extract to api/src/controllers/adminController.js"
+    },
+    {
+      "type": "INLINE_CONTROLLER",
+      "route": "GET /api/v1/admin/status",
+      "expectedController": "performHealthCheck",
+      "actualStatus": "inline function in route file",
+      "severity": "low",
+      "suggestion": "Extract to api/src/controllers/adminController.js"
+    }
+  ],
+  "unregisteredRoutes": [
+    {
+      "file": "api/src/routes/admin.js",
+      "endpoints": 5,
+      "suggestion": "Add to server.js: app.use('/api/v1/admin', adminRoutes)"
+    }
+  ],
+  "matchedRoutes": [
+    {
+      "route": "POST /api/v1/tasks",
+      "controller": "taskController.create",
+      "status": "OK"
+    },
+    {
+      "route": "GET /api/v1/tasks",
+      "controller": "taskController.list",
+      "status": "OK"
+    },
+    {
+      "route": "GET /api/v1/tasks/:taskId",
+      "controller": "taskController.getStatus",
+      "status": "OK"
+    },
+    {
+      "route": "DELETE /api/v1/tasks/:taskId",
+      "controller": "taskController.cancel",
+      "status": "OK"
+    },
+    {
+      "route": "GET /api/v1/cache/:trademark",
+      "controller": "cacheController.get",
+      "status": "OK"
+    },
+    {
+      "route": "DELETE /api/v1/cache/:trademark",
+      "controller": "cacheController.delete",
+      "status": "OK"
+    },
+    {
+      "route": "POST /api/v1/cache/clear-expired",
+      "controller": "cacheController.clearExpired",
+      "status": "OK"
+    }
+  ]
+}

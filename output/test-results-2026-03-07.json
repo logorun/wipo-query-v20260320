@@ -1,0 +1,145 @@
+[
+  {
+    "trademark": "WIIM",
+    "queryStatus": "found",
+    "totalRecords": 2,
+    "euRecords": 0,
+    "nonEURecords": 2,
+    "records": [
+      {
+        "brandName": "WIIM",
+        "owner": "Linkplay Technology Inc. (USA",
+        "status": "",
+        "country": "Norway",
+        "countryCode": "",
+        "regNumber": "338675",
+        "regDate": "",
+        "niceClasses": [
+          "9"
+        ],
+        "isEU": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "WIIM",
+        "owner": "Linkplay Technology Inc. (USA",
+        "status": "",
+        "country": "Japan",
+        "countryCode": "",
+        "regNumber": "018867198",
+        "regDate": "",
+        "niceClasses": [
+          "9"
+        ],
+        "isEU": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T17:30:30.909Z",
+    "fromCache": false,
+    "queryDuration": "30.2s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/WIIM-2026-03-07T17-30-30-484Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "9TRANSPORT",
+    "queryStatus": "found",
+    "totalRecords": 2,
+    "euRecords": 2,
+    "nonEURecords": 0,
+    "records": [
+      {
+        "brandName": "9TRANSPORT",
+        "owner": "JOAN MANUEL TEIXIDO BLASCO (Spain",
+        "status": "",
+        "country": "Spain",
+        "countryCode": "ES",
+        "regNumber": "M2919818",
+        "regDate": "",
+        "niceClasses": [
+          "35"
+        ],
+        "isEU": true,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "9TRANSPORT",
+        "owner": "JUAN MANUEL TEIXIDO BLASCO (Spain",
+        "status": "",
+        "country": "Spain",
+        "countryCode": "ES",
+        "regNumber": "M4123051",
+        "regDate": "",
+        "niceClasses": [
+          "35"
+        ],
+        "isEU": true,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T17:31:10.654Z",
+    "fromCache": false,
+    "queryDuration": "31.1s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/9TRANSPORT-2026-03-07T17-31-10-248Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "ADIDAS",
+    "queryStatus": "found",
+    "totalRecords": 3,
+    "euRecords": 0,
+    "nonEURecords": 3,
+    "records": [
+      {
+        "brandName": "ADIDAS",
+        "owner": "ADIDAS AG (Germany",
+        "status": "",
+        "country": "Brunei Darussalam",
+        "countryCode": "",
+        "regNumber": "18633",
+        "regDate": "",
+        "niceClasses": [
+          "28"
+        ],
+        "isEU": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "ADIDAS",
+        "owner": "ADIDAS AG (Germany",
+        "status": "",
+        "country": "Brazil",
+        "countryCode": "",
+        "regNumber": "006080685",
+        "regDate": "",
+        "niceClasses": [],
+        "isEU": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "ADIDAS",
+        "owner": "ADIDAS AG (Germany",
+        "status": "",
+        "country": "Brazil",
+        "countryCode": "",
+        "regNumber": "816873402",
+        "regDate": "",
+        "niceClasses": [],
+        "isEU": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T17:31:52.171Z",
+    "fromCache": false,
+    "queryDuration": "31.7s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/ADIDAS-2026-03-07T17-31-51-734Z.png",
+    "isInternational": false
+  }
+]

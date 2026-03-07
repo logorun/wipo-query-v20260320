@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WIPO Trademark Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen">
+    <nav class="glass border-b border-white/10 px-6 py-4">
+        <div class="flex items-center justify-between max-w-7xl mx-auto">
+            <h1 class="text-2xl font-bold text-white">🌐 WIPO Trademark Dashboard</h1>
+            <div class="flex items-center gap-4">
+                <span id="api-status" class="px-3 py-1 rounded-full text-sm bg-green-500/20 text-green-400">API Online</span>
+                <button onclick="refreshData()" class="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition">刷新</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">总任务数</h3>
+                <p id="stat-total" class="text-3xl font-bold text-white mt-2">-</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">已完成</h3>
+                <p id="stat-completed" class="text-3xl font-bold text-green-400 mt-2">-</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">处理中</h3>
+                <p id="stat-processing" class="text-3xl font-bold text-blue-400 mt-2">-</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">失败</h3>
+                <p id="stat-failed" class="text-3xl font-bold text-red-400 mt-2">-</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-white font-semibold mb-4">任务状态分布</h3>
+                <canvas id="statusChart"></canvas>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-white font-semibold mb-4">每日查询量</h3>
+                <canvas id="dailyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="glass rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-white font-semibold">最近任务</h3>
+                <select id="status-filter" class="bg-slate-800 border border-slate-700 rounded px-3 py-1 text-sm text-white">
+                    <option value="all">全部状态</option>
+                    <option value="completed">已完成</option>
+                    <option value="processing">处理中</option>
+                    <option value="pending">待处理</option>
+                    <option value="failed">失败</option>
+                </select>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-slate-400 border-b border-slate-700">
+                            <th class="pb-3">任务ID</th>
+                            <th class="pb-3">商标</th>
+                            <th class="pb-3">状态</th>
+                            <th class="pb-3">创建时间</th>
+                            <th class="pb-3">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="task-list" class="text-slate-300"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="glass rounded-xl p-6">
+            <h3 class="text-white font-semibold mb-4">提交新查询</h3>
+            <div class="flex gap-4">
+                <input type="text" id="new-trademarks" placeholder="输入商标名称，多个用逗号分隔" class="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white">
+                <button onclick="submitTask()" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition">提交查询</button>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/api.js"></script>
+    <script src="js/charts.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+version: '3.8'
+
+# ==============================================
+# WIPO Trademark Batch Docker Compose
+# ==============================================
+# 使用方法:
+#   docker-compose up -d      启动服务
+#   docker-compose down       停止服务
+#   docker-compose logs -f   查看日志
+# ==============================================
+
+services:
+  # Redis 服务
+  redis:
+    image: redis:7-alpine
+    container_name: wipo-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - wipo-network
+
+  # API 服务
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: wipo-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./api:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_KEY=logotestkey
+      - CACHE_TTL_HOURS=24
+      - QUERY_DELAY_MS=5000
+      - QUERY_TIMEOUT_MS=120000
+      - MAX_RETRIES=3
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - wipo-network
+
+  # Worker 服务
+  worker:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: wipo-worker
+    restart: unless-stopped
+    volumes:
+      - ./api:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./output:/app/output
+    environment:
+      - NODE_ENV=production
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_KEY=logotestkey
+      - CACHE_TTL_HOURS=24
+      - QUERY_DELAY_MS=5000
+      - QUERY_TIMEOUT_MS=120000
+      - MAX_RETRIES=3
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - wipo-network
+
+networks:
+  wipo-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+    driver: local

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "bc72ae65-c62a-4012-90ac-8efddbfcae44",
+    "url": "https://httpbin.org/post",
+    "events": [
+      "task.completed"
+    ],
+    "description": "Test webhook",
+    "secret": "3046681152d7c95496385d439ccbbf391179f59885bec12a83f408e1f41cc039",
+    "active": true,
+    "createdAt": "2026-03-06T11:03:10.227Z"
+  }
+]

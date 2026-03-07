@@ -1,0 +1,54 @@
+.glass {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.status-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-completed {
+    background: rgba(74, 222, 128, 0.2);
+    color: #4ade80;
+}
+
+.status-processing {
+    background: rgba(59, 130, 246, 0.2);
+    color: #3b82f6;
+}
+
+.status-pending {
+    background: rgba(250, 204, 21, 0.2);
+    color: #facc15;
+}
+
+.status-failed {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+}
+
+table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.05);
+}

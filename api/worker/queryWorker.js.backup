@@ -1,0 +1,537 @@
+require('dotenv').config();
+const { queryQueue, gracefulShutdown } = require('../src/services/queueService');
+const { taskDB, cacheDB } = require('../src/models/database');
+const cacheService = require('../src/services/cacheService');
+const { Logger } = require('../src/utils/logger');
+const { metrics } = require('../src/utils/metrics');
+const { execSync } = require('child_process');
+const fs = require('fs');
+const path = require('path');
+
+const logger = new Logger('worker');
+
+// 工具函数
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+// 欧盟国家代码映射（用于国际注册展开）
+const EU_COUNTRIES_MAP = {
+  'Austria': { code: 'AT', isEU: true },
+  'Belgium': { code: 'BE', isEU: true },
+  'Bulgaria': { code: 'BG', isEU: true },
+  'Croatia': { code: 'HR', isEU: true },
+  'Cyprus': { code: 'CY', isEU: true },
+  'Czech Republic': { code: 'CZ', isEU: true },
+  'Denmark': { code: 'DK', isEU: true },
+  'Estonia': { code: 'EE', isEU: true },
+  'Finland': { code: 'FI', isEU: true },
+  'France': { code: 'FR', isEU: true },
+  'Germany': { code: 'DE', isEU: true },
+  'Greece': { code: 'GR', isEU: true },
+  'Hungary': { code: 'HU', isEU: true },
+  'Ireland': { code: 'IE', isEU: true },
+  'Italy': { code: 'IT', isEU: true },
+  'Latvia': { code: 'LV', isEU: true },
+  'Lithuania': { code: 'LT', isEU: true },
+  'Luxembourg': { code: 'LU', isEU: true },
+  'Malta': { code: 'MT', isEU: true },
+  'Netherlands': { code: 'NL', isEU: true },
+  'Poland': { code: 'PL', isEU: true },
+  'Portugal': { code: 'PT', isEU: true },
+  'Romania': { code: 'RO', isEU: true },
+  'Slovakia': { code: 'SK', isEU: true },
+  'Slovenia': { code: 'SI', isEU: true },
+  'Spain': { code: 'ES', isEU: true },
+  'Sweden': { code: 'SE', isEU: true },
+  'United Kingdom': { code: 'GB', isEU: false }, // 脱欧
+  'European Union': { code: 'EM', isEU: true },
+  'EM': { code: 'EM', isEU: true } // 欧盟商标注册
+};
+
+// 欧盟国家代码列表
+const EU_COUNTRY_CODES = Object.values(EU_COUNTRIES_MAP)
+  .filter(c => c.isEU)
+  .map(c => c.code);
+
+/**
+ * 解析快照提取商标记录
+ * 支持国际注册识别和展开
+ */
+const parseSnapshot = (snapshot, trademark) => {
+  const records = [];
+  const lines = snapshot.split('\n');
+
+  // 查找结果数量
+  const resultMatch = snapshot.match(/Displaying\s*\d+-\d+\s*of\s*(\d+)/i);
+  const totalResults = resultMatch ? parseInt(resultMatch[1]) : 0;
+
+  if (totalResults === 0) {
+    return records;
+  }
+
+  logger.debug(`Parsing ${totalResults} total results`, { trademark });
+
+  // 解析每个结果块
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    
+    // 查找商标名称行（通常在 listitem 中）
+    const brandMatch = line.match(/text:\s*([^,]+?)\s*Owner/i);
+    if (brandMatch) {
+      const brandName = brandMatch[1].trim();
+      
+      // 检查精确匹配（不区分大小写）
+      if (brandName.toUpperCase() === trademark.toUpperCase()) {
+        const record = extractRecord(lines, i, trademark);
+        if (record) {
+          records.push(record);
+        }
+      }
+    }
+    i++;
+  }
+
+  return records;
+};
+
+/**
+ * 从快照行中提取单个记录
+ */
+const extractRecord = (lines, startIndex, trademark) => {
+  const record = {
+    brandName: trademark,
+    owner: '',
+    status: '',
+    country: '',
+    countryCode: '',
+    regNumber: '',
+    regDate: '',
+    niceClasses: [],
+    isEU: false,
+    isInternational: false,
+    designatedCountries: [] // 国际注册指定国家
+  };
+
+  // 提取持有人（当前行或接下来几行）
+  for (let j = startIndex; j < Math.min(startIndex + 5, lines.length); j++) {
+    const ownerMatch = lines[j].match(/Owner\s+([^)]+)\)/i);
+    if (ownerMatch && !record.owner) {
+      record.owner = ownerMatch[1].trim();
+      break;
+    }
+  }
+
+  // 查找后续信息（搜索接下来50行）
+  let recordEndIndex = startIndex;
+  for (let j = startIndex; j < Math.min(startIndex + 50, lines.length); j++) {
+    const line = lines[j];
+    
+    // 检测记录结束（下一个商标或分页）
+    if (j > startIndex + 5 && line.match(/text:\s*[^,]+?\s*Owner/i)) {
+      recordEndIndex = j;
+      break;
+    }
+
+    // 提取国家
+    const countryMatch = line.match(/Country of filing\s+([A-Za-z\s,()]+?)(?:\s+Status|$)/i);
+    if (countryMatch && !record.country) {
+      const countryFull = countryMatch[1].trim();
+      record.country = countryFull;
+      
+      // 提取国家代码
+      const codeMatch = countryFull.match(/\(([A-Z]{2})\)/);
+      if (codeMatch) {
+        record.countryCode = codeMatch[1];
+        record.isEU = EU_COUNTRY_CODES.includes(codeMatch[1]);
+      }
+      
+      // 检查是否为国际注册
+      if (countryFull.includes(',') || countryFull.toLowerCase().includes('international')) {
+        record.isInternational = true;
+        // 提取所有指定国家
+        const countries = countryFull.split(',').map(c => c.trim());
+        for (const country of countries) {
+          const codeMatch = country.match(/\(([A-Z]{2})\)/);
+          if (codeMatch) {
+            const code = codeMatch[1];
+            const countryName = country.replace(/\s*\([A-Z]{2}\)/, '').trim();
+            record.designatedCountries.push({
+              name: countryName,
+              code: code,
+              isEU: EU_COUNTRY_CODES.includes(code)
+            });
+          }
+        }
+      }
+    }
+
+    // 提取状态
+    const statusMatch = line.match(/Status\s+([A-Za-z\s]+)/i);
+    if (statusMatch && !record.status) {
+      record.status = statusMatch[1].trim();
+      // 检查是否为国际注册
+      if (record.status.toLowerCase().includes('international')) {
+        record.isInternational = true;
+      }
+    }
+
+    // 提取注册号
+    const regMatch = line.match(/(?:Registration\s+)?Number[\s:]+([A-Z0-9\-\/]+)/i);
+    if (regMatch && !record.regNumber) {
+      record.regNumber = regMatch[1].trim();
+    }
+
+    // 提取日期
+    const dateMatch = line.match(/(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch && !record.regDate) {
+      record.regDate = dateMatch[1];
+    }
+
+    // 提取尼斯分类
+    const niceMatch = line.match(/Nice class(?:es)?[\s:]+([\d,\s]+)/i);
+    if (niceMatch) {
+      const classes = niceMatch[1].split(/[,\s]+/).map(c => c.trim()).filter(c => c && /^\d+$/.test(c));
+      if (classes.length > 0) {
+        record.niceClasses = [...new Set([...record.niceClasses, ...classes])];
+      }
+    }
+  }
+
+  // 验证必需字段
+  if (!record.status || !record.country) {
+    logger.warn('Incomplete record found', { 
+      trademark, 
+      status: record.status, 
+      country: record.country 
+    });
+  }
+
+  return record;
+};
+
+/**
+ * 展开国际注册为多个欧盟国家记录
+ * 例如：一个 International Registration 展开为 28 条欧盟国家记录
+ */
+const expandInternationalRegistration = (record) => {
+  if (!record.isInternational || record.designatedCountries.length === 0) {
+    return [record];
+  }
+
+  const expanded = [];
+  
+  // 过滤出欧盟国家
+  const euCountries = record.designatedCountries.filter(c => c.isEU);
+  
+  if (euCountries.length === 0) {
+    logger.debug('International registration has no EU countries', { 
+      regNumber: record.regNumber 
+    });
+    return [record];
+  }
+
+  logger.info(`Expanding international registration to ${euCountries.length} EU countries`, {
+    regNumber: record.regNumber,
+    countries: euCountries.map(c => c.code)
+  });
+
+  // 为每个欧盟国家创建独立记录
+  for (const country of euCountries) {
+    expanded.push({
+      ...record,
+      country: country.name,
+      countryCode: country.code,
+      isEU: true,
+      isInternational: true,
+      isExpanded: true, // 标记为展开记录
+      originalRegNumber: record.regNumber,
+      designatedCountries: record.designatedCountries // 保留完整国家列表
+    });
+  }
+
+  return expanded;
+};
+
+/**
+ * 保存查询证据截图
+ */
+const saveEvidence = async (trademark, snapshot) => {
+  const evidenceDir = path.join(__dirname, '../../output/evidence');
+  if (!fs.existsSync(evidenceDir)) {
+    fs.mkdirSync(evidenceDir, { recursive: true });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `${trademark}-${timestamp}.png`;
+  const filepath = path.join(evidenceDir, filename);
+
+  try {
+    execSync(`agent-browser screenshot "${filepath}"`, { timeout: 10000 });
+    logger.debug('Evidence screenshot saved', { trademark, filepath });
+    return filepath;
+  } catch (error) {
+    logger.error('Failed to save evidence', { trademark, error: error.message });
+    return null;
+  }
+};
+
+/**
+ * 查询单个商标（带重试）
+ */
+const queryTrademark = async (trademark, options = {}) => {
+  const { saveEvidence: shouldSaveEvidence = false, maxRetries = 3 } = options;
+  const startTime = Date.now();
+  
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info(`Querying trademark (attempt ${attempt}/${maxRetries})`, { trademark });
+
+      // 1. 打开页面（使用 connect 模式保持连接）
+      execSync('agent-browser open "https://branddb.wipo.int/en/advancedsearch" --connect', { 
+        timeout: 60000 
+      });
+      // 使用多次短等待代替一次长等待，保持连接活跃
+      for (let i = 0; i < 5; i++) {
+        await sleep(3000);
+        try { execSync('agent-browser get url', { timeout: 5000 }); } catch (e) {}
+      }
+
+      // 2. 选择精确匹配策略
+      execSync('agent-browser select "e39" "is matching exact expression"', { 
+        timeout: 30000 
+      });
+      await sleep(2000);
+
+      // 3. 输入商标名称
+      execSync(`agent-browser fill "e45" "${trademark}"`, { timeout: 30000 });
+      await sleep(1000);
+
+      // 4. 点击搜索
+      execSync('agent-browser click "e10"', { timeout: 30000 });
+      
+      // 5. 等待结果加载（多次短等待）
+      const totalWait = 15000 + Math.floor(Math.random() * 5000);
+      const intervals = Math.ceil(totalWait / 3000);
+      for (let i = 0; i < intervals; i++) {
+        await sleep(3000);
+        // 保持连接活跃
+        try { execSync('agent-browser get url', { timeout: 5000 }); } catch (e) {}
+      }
+
+      // 6. 获取结果快照
+      const snapshot = execSync('agent-browser snapshot', { 
+        timeout: 30000, 
+        encoding: 'utf-8' 
+      });
+
+      // 7. 保存证据截图
+      let evidencePath = null;
+      if (shouldSaveEvidence) {
+        evidencePath = await saveEvidence(trademark, snapshot);
+      }
+
+      // 8. 关闭浏览器
+      execSync('agent-browser close', { timeout: 10000 });
+
+      // 9. 解析结果
+      let records = parseSnapshot(snapshot, trademark);
+      
+      // 10. 展开国际注册
+      const expandedRecords = [];
+      for (const record of records) {
+        const expanded = expandInternationalRegistration(record);
+        expandedRecords.push(...expanded);
+      }
+      
+      // 过滤只保留欧盟记录（或标记非欧盟）
+      const euRecords = expandedRecords.filter(r => r.isEU);
+      const nonEURecords = expandedRecords.filter(r => !r.isEU);
+
+      const result = {
+        trademark,
+        queryStatus: expandedRecords.length > 0 ? 'found' : 'not_found',
+        totalRecords: expandedRecords.length,
+        euRecords: euRecords.length,
+        nonEURecords: nonEURecords.length,
+        records: expandedRecords,
+        queryTime: new Date().toISOString(),
+        fromCache: false,
+        queryDuration: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+        evidencePath,
+        isInternational: expandedRecords.some(r => r.isInternational)
+      };
+
+      logger.info(`Query completed`, { 
+        trademark, 
+        totalRecords: result.totalRecords,
+        euRecords: result.euRecords,
+        duration: result.queryDuration
+      });
+
+      metrics.timing('trademark_query_duration', Date.now() - startTime, { 
+        status: result.queryStatus 
+      });
+
+      return result;
+
+    } catch (error) {
+      lastError = error;
+      logger.error(`Query attempt ${attempt} failed`, { 
+        trademark, 
+        error: error.message 
+      });
+
+      // 确保浏览器关闭
+      try {
+        execSync('agent-browser close', { timeout: 5000 });
+      } catch (e) {
+        // 忽略关闭错误
+      }
+
+      // 指数退避重试
+      if (attempt < maxRetries) {
+        const retryDelay = 5000 * Math.pow(2, attempt - 1); // 5s, 10s, 20s
+        logger.info(`Retrying in ${retryDelay}ms...`);
+        await sleep(retryDelay);
+      }
+    }
+  }
+
+  // 所有重试失败
+  logger.error(`All ${maxRetries} attempts failed`, { trademark });
+  metrics.increment('trademark_query_failed');
+
+  return {
+    trademark,
+    queryStatus: 'error',
+    records: [],
+    queryTime: new Date().toISOString(),
+    fromCache: false,
+    error: lastError?.message || 'Unknown error'
+  };
+};
+
+/**
+ * 处理队列任务
+ */
+queryQueue.process(async (job) => {
+  const { taskId, trademarks } = job.data;
+  const jobLogger = logger.child(`job-${job.id}`);
+  
+  jobLogger.info('Processing job', { 
+    taskId, 
+    trademarkCount: trademarks.length 
+  });
+
+  // 更新任务状态为处理中
+  await taskDB.updateStatus(taskId, 'processing', { 
+    startedAt: new Date().toISOString() 
+  });
+
+  const results = [];
+  let processed = 0;
+  let failed = 0;
+
+  for (let i = 0; i < trademarks.length; i++) {
+    const trademark = trademarks[i];
+    jobLogger.info(`Processing trademark ${i + 1}/${trademarks.length}`, { trademark });
+
+    try {
+      // 1. 检查缓存
+      const cached = await cacheDB.get(trademark);
+      let result;
+
+      if (cached) {
+        jobLogger.debug('Using cached data', { trademark });
+        result = {
+          ...cached.data,
+          fromCache: true,
+          cacheTime: cached.updated_at
+        };
+        metrics.increment('trademark_query_cache_hit');
+      } else {
+        // 2. 执行查询
+        result = await queryTrademark(trademark, { 
+          saveEvidence: true,
+          maxRetries: 3
+        });
+        metrics.increment('trademark_query_cache_miss');
+
+        // 3. 保存到缓存（如果查询成功）
+        if (result.queryStatus !== 'error') {
+          await cacheService.set(trademark, result);
+        }
+      }
+
+      results.push(result);
+      processed++;
+
+      // 更新进度
+      await taskDB.updateStatus(taskId, 'processing', {
+        progress: { processed, failed, total: trademarks.length }
+      });
+
+      // 商标间延迟（带随机，避免被封）
+      if (i < trademarks.length - 1) {
+        const delay = 5000 + Math.floor(Math.random() * 5000); // 5-10秒
+        await sleep(delay);
+      }
+
+    } catch (error) {
+      jobLogger.error(`Failed to process trademark`, { 
+        trademark, 
+        error: error.message 
+      });
+      
+      results.push({
+        trademark,
+        queryStatus: 'error',
+        records: [],
+        queryTime: new Date().toISOString(),
+        fromCache: false,
+        error: error.message
+      });
+      failed++;
+    }
+  }
+
+  // 完成任务
+  jobLogger.info('Job completed', { 
+    processed, 
+    failed, 
+    total: trademarks.length 
+  });
+
+  await taskDB.updateStatus(taskId, 'completed', {
+    completedAt: new Date().toISOString(),
+    results,
+    progress: { processed, failed, total: trademarks.length }
+  });
+
+  return { taskId, processed, failed, results };
+});
+
+// 队列事件监听
+queryQueue.on('completed', (job) => {
+  logger.info('Job completed', { jobId: job.id });
+  metrics.increment('jobs_completed_total');
+});
+
+queryQueue.on('failed', (job, err) => {
+  logger.error('Job failed', { jobId: job.id, error: err.message });
+  metrics.increment('jobs_failed_total');
+});
+
+logger.info('🚀 Worker started, waiting for jobs...');
+
+// 优雅退出
+const shutdown = async (signal) => {
+  logger.info(`Received ${signal}, shutting down gracefully...`);
+  await gracefulShutdown();
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -1,0 +1,176 @@
+{
+  "generatedAt": "2026-03-06T10:31:00Z",
+  "totalFiles": 5,
+  "totalEndpoints": 14,
+  "files": [
+    {
+      "file": "api/src/routes/tasks.js",
+      "registered": true,
+      "basePath": "/api/v1/tasks",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/tasks",
+          "routePattern": "POST /",
+          "controller": "taskController.create",
+          "middlewares": ["taskSubmitLimiter", "requestSizeLimit('1mb')", "validateTaskRequest"]
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks",
+          "routePattern": "GET /",
+          "controller": "taskController.list",
+          "middlewares": ["validateListQuery"]
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/tasks/:taskId",
+          "routePattern": "GET /:taskId",
+          "controller": "taskController.getStatus",
+          "middlewares": ["validateTaskId"]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/tasks/:taskId",
+          "routePattern": "DELETE /:taskId",
+          "controller": "taskController.cancel",
+          "middlewares": ["validateTaskId"]
+        }
+      ]
+    },
+    {
+      "file": "api/src/routes/cache.js",
+      "registered": true,
+      "basePath": "/api/v1/cache",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/v1/cache/:trademark",
+          "routePattern": "GET /:trademark",
+          "controller": "cacheController.get",
+          "middlewares": ["validateCacheQuery"]
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/cache/:trademark",
+          "routePattern": "DELETE /:trademark",
+          "controller": "cacheController.delete",
+          "middlewares": ["validateCacheQuery"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/cache/clear-expired",
+          "routePattern": "POST /clear-expired",
+          "controller": "cacheController.clearExpired",
+          "middlewares": []
+        }
+      ]
+    },
+    {
+      "file": "api/src/routes/webhooks.js",
+      "registered": true,
+      "basePath": "/api/v1",
+      "endpoints": [
+        {
+          "method": "POST",
+          "path": "/api/v1/webhooks",
+          "routePattern": "POST /webhooks",
+          "controller": "inline (webhookService.registerWebhook)",
+          "middlewares": ["body validation (url, events, description)"]
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/webhooks",
+          "routePattern": "GET /webhooks",
+          "controller": "inline (webhookService.listWebhooks)",
+          "middlewares": []
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/webhooks/:id",
+          "routePattern": "DELETE /webhooks/:id",
+          "controller": "inline (webhookService.deleteWebhook)",
+          "middlewares": ["param validation (id: UUID)"]
+        },
+        {
+          "method": "POST",
+          "path": "/api/v1/webhooks/test",
+          "routePattern": "POST /webhooks/test",
+          "controller": "inline (test webhook)",
+          "middlewares": ["body validation (url)"]
+        }
+      ]
+    },
+    {
+      "file": "api/src/routes/export.js",
+      "registered": true,
+      "basePath": "/api/v1/export",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/v1/export/:taskId",
+          "routePattern": "GET /:taskId",
+          "controller": "exportController.exportTask",
+          "middlewares": []
+        }
+      ]
+    },
+    {
+      "file": "api/src/routes/admin.js",
+      "registered": false,
+      "basePath": "/api/v1/admin",
+      "endpoints": [
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/health",
+          "routePattern": "GET /health",
+          "controller": "inline (performHealthCheck)",
+          "middlewares": []
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/metrics",
+          "routePattern": "GET /metrics",
+          "controller": "inline (metrics.getStats)",
+          "middlewares": []
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/alerts",
+          "routePattern": "GET /alerts",
+          "controller": "inline (getAlertHistory)",
+          "middlewares": []
+        },
+        {
+          "method": "DELETE",
+          "path": "/api/v1/admin/alerts",
+          "routePattern": "DELETE /alerts",
+          "controller": "inline (clearAlertHistory)",
+          "middlewares": []
+        },
+        {
+          "method": "GET",
+          "path": "/api/v1/admin/status",
+          "routePattern": "GET /status",
+          "controller": "inline (performHealthCheck)",
+          "middlewares": []
+        }
+      ],
+      "note": "File exists but NOT registered in server.js"
+    }
+  ],
+  "notes": {
+    "missingFiles": [
+      "api/src/routes/index.js - File does not exist. Routes are registered directly in server.js"
+    ],
+    "unregisteredRoutes": [
+      "api/src/routes/admin.js - Exists but not registered in server.js"
+    ],
+    "serverRegistration": {
+      "tasks": "/api/v1/tasks",
+      "cache": "/api/v1/cache",
+      "export": "/api/v1/export",
+      "webhooks": "/api/v1 (routes prefixed with /webhooks)"
+    }
+  }
+}

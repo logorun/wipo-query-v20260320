@@ -1,0 +1,72 @@
+{
+  "generatedAt": "2026-03-06T10:40:00Z",
+  "summary": {
+    "totalTasks": 3,
+    "byPriority": {
+      "high": 1,
+      "medium": 1,
+      "low": 1
+    }
+  },
+  "phases": [
+    {
+      "phase": "phase-1-admin-registration",
+      "description": "注册缺失的 admin 路由到 server.js",
+      "tasks": [
+        {
+          "id": "R1-register-admin-routes",
+          "description": "在 server.js 中注册 admin 路由",
+          "priority": "high",
+          "dependencies": [],
+          "estimatedDuration": "5min",
+          "files": {
+            "modify": ["api/src/server.js"]
+          },
+          "implementationNotes": "添加: const adminRoutes = require('./routes/admin'); 和 app.use(`/api/${config.server.apiVersion}/admin`, adminRoutes);"
+        }
+      ]
+    },
+    {
+      "phase": "phase-2-webhooks",
+      "description": "重构 webhooks 到 controller",
+      "tasks": [
+        {
+          "id": "R2-create-webhook-controller",
+          "description": "创建 api/src/controllers/webhookController.js，提取 4 个内联函数",
+          "priority": "medium",
+          "dependencies": ["R1-register-admin-routes"],
+          "estimatedDuration": "15min",
+          "files": {
+            "create": ["api/src/controllers/webhookController.js"],
+            "modify": ["api/src/routes/webhooks.js"]
+          },
+          "implementationNotes": "从 webhooks.js 提取以下函数到 controller: registerWebhook, listWebhooks, deleteWebhook, testWebhook。保持现有的 webhookService 调用不变。"
+        }
+      ]
+    },
+    {
+      "phase": "phase-3-admin",
+      "description": "重构 admin 到 controller",
+      "tasks": [
+        {
+          "id": "R3-create-admin-controller",
+          "description": "创建 api/src/controllers/adminController.js，提取 5 个内联函数",
+          "priority": "low",
+          "dependencies": ["R1-register-admin-routes"],
+          "estimatedDuration": "15min",
+          "files": {
+            "create": ["api/src/controllers/adminController.js"],
+            "modify": ["api/src/routes/admin.js"]
+          ],
+          "implementationNotes": "从 admin.js 提取以下函数到 controller: health, metrics, alerts (GET), alerts (DELETE), status。保持现有的 healthCheck、metrics 和 logger 引用。"
+        }
+      ]
+    }
+  ],
+  "notes": {
+    "exportControllerStatus": "exportController.js 已存在且 exportTask 方法已实现，无需创建",
+    "adminRoutesStatus": "admin.js 路由文件存在但未在 server.js 中注册",
+    "webhookInlineFunctions": 4,
+    "adminInlineFunctions": 5
+  }
+}

@@ -1,0 +1,366 @@
+[
+  {
+    "trademark": "APEX",
+    "queryStatus": "found",
+    "totalRecords": 3,
+    "euRecords": 0,
+    "nonEURecords": 3,
+    "records": [
+      {
+        "brandName": "APEX",
+        "owner": "فيفو موبايل كوميونيكيشن كو ليمتد (China",
+        "status": "Registered",
+        "statusDate": "January 16, 2023",
+        "country": "Oman",
+        "countryCode": "",
+        "regNumber": "1/127938",
+        "regDate": "",
+        "niceClasses": [
+          "9"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "APEX",
+        "owner": "ابكس ميديكال كوربوريشن - شركة مساهمة تأسست وقائمة طبقا لقوانين تايوان (Taiwan (Province of China",
+        "status": "Registered",
+        "statusDate": "September 8, 2010",
+        "country": "Egypt",
+        "countryCode": "",
+        "regNumber": "201806",
+        "regDate": "",
+        "niceClasses": [
+          "10"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "APEX",
+        "owner": "فيفو موبايل كوميونيكيشن كو، إل تي دي (China",
+        "status": "Registered",
+        "statusDate": "December 8, 2021",
+        "country": "Qatar",
+        "countryCode": "",
+        "regNumber": "131328",
+        "regDate": "",
+        "niceClasses": [
+          "9"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T18:40:33.024Z",
+    "fromCache": false,
+    "queryDuration": "31.3s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/APEX-2026-03-07T18-40-32-592Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "METAHUB",
+    "queryStatus": "found",
+    "totalRecords": 3,
+    "euRecords": 0,
+    "nonEURecords": 3,
+    "records": [
+      {
+        "brandName": "METAHUB",
+        "owner": "Ascential Software Corporation (USA",
+        "status": "",
+        "statusDate": "",
+        "country": "Canada",
+        "countryCode": "",
+        "regNumber": "1010861",
+        "regDate": "",
+        "niceClasses": [
+          "9",
+          "42"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "METAHUB",
+        "owner": "Only-Metahubs, Ltd. (Bahamas",
+        "status": "",
+        "statusDate": "",
+        "country": "USA",
+        "countryCode": "",
+        "regNumber": "76074421",
+        "regDate": "",
+        "niceClasses": [
+          "42",
+          "9"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "METAHUB",
+        "owner": "Informix Corporation a Delaware corporation (USA",
+        "status": "",
+        "statusDate": "",
+        "country": "Australia",
+        "countryCode": "",
+        "regNumber": "807711",
+        "regDate": "",
+        "niceClasses": [
+          "9"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T18:41:13.936Z",
+    "fromCache": false,
+    "queryDuration": "31.4s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/METAHUB-2026-03-07T18-41-13-511Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "AURORA273",
+    "queryStatus": "not_found",
+    "totalRecords": 0,
+    "euRecords": 0,
+    "nonEURecords": 0,
+    "records": [],
+    "queryTime": "2026-03-07T18:41:54.420Z",
+    "fromCache": false,
+    "queryDuration": "31.1s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/AURORA273-2026-03-07T18-41-53-995Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "CYBERLAB",
+    "queryStatus": "found",
+    "totalRecords": 3,
+    "euRecords": 1,
+    "nonEURecords": 2,
+    "records": [
+      {
+        "brandName": "CYBERLAB",
+        "owner": "Hubert Burda Media Holding Kommanditgesellschaft (Germany",
+        "status": "Expired",
+        "statusDate": "October 31, 2015",
+        "country": "Germany",
+        "countryCode": "DE",
+        "regNumber": "30561248",
+        "regDate": "",
+        "niceClasses": [
+          "16",
+          "35",
+          "41",
+          "42"
+        ],
+        "isEU": true,
+        "isEurope": true,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "CYBERLAB",
+        "owner": "Ericsson Inc. (USA",
+        "status": "",
+        "statusDate": "",
+        "country": "USA",
+        "countryCode": "",
+        "regNumber": "75447477",
+        "regDate": "",
+        "niceClasses": [
+          "42",
+          "41"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "CYBERLAB",
+        "owner": "프리에듀넷(주",
+        "status": "",
+        "statusDate": "",
+        "country": "Korea (Republic of)",
+        "countryCode": "",
+        "regNumber": "4120040001136",
+        "regDate": "",
+        "niceClasses": [
+          "41"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T18:42:35.000Z",
+    "fromCache": false,
+    "queryDuration": "31.5s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/CYBERLAB-2026-03-07T18-42-34-582Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "METATITAN",
+    "queryStatus": "not_found",
+    "totalRecords": 0,
+    "euRecords": 0,
+    "nonEURecords": 0,
+    "records": [],
+    "queryTime": "2026-03-07T18:43:14.883Z",
+    "fromCache": false,
+    "queryDuration": "31.2s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/METATITAN-2026-03-07T18-43-14-476Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "CYBERVERTEX",
+    "queryStatus": "not_found",
+    "totalRecords": 0,
+    "euRecords": 0,
+    "nonEURecords": 0,
+    "records": [],
+    "queryTime": "2026-03-07T18:43:51.319Z",
+    "fromCache": false,
+    "queryDuration": "31.2s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/CYBERVERTEX-2026-03-07T18-43-50-913Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "HYPERWEB",
+    "queryStatus": "found",
+    "totalRecords": 3,
+    "euRecords": 0,
+    "nonEURecords": 3,
+    "records": [
+      {
+        "brandName": "HYPERWEB",
+        "owner": "MultiStream Systems Incorporated (USA",
+        "status": "",
+        "statusDate": "",
+        "country": "USA",
+        "countryCode": "",
+        "regNumber": "74033470",
+        "regDate": "",
+        "niceClasses": [
+          "9"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "HYPERWEB",
+        "owner": "Gadgets by Small, Inc. (USA",
+        "status": "Registered",
+        "statusDate": "January 9, 2024",
+        "country": "USA",
+        "countryCode": "",
+        "regNumber": "74101788",
+        "regDate": "",
+        "niceClasses": [
+          "9",
+          "42"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      },
+      {
+        "brandName": "HYPERWEB",
+        "owner": "MicroStrategy Incorporated (USA",
+        "status": "Registered",
+        "statusDate": "January 9, 2024",
+        "country": "USA",
+        "countryCode": "",
+        "regNumber": "7269895",
+        "regDate": "",
+        "niceClasses": [
+          "42"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T18:44:31.396Z",
+    "fromCache": false,
+    "queryDuration": "31.2s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/HYPERWEB-2026-03-07T18-44-30-981Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "8HH45",
+    "queryStatus": "not_found",
+    "totalRecords": 0,
+    "euRecords": 0,
+    "nonEURecords": 0,
+    "records": [],
+    "queryTime": "2026-03-07T18:45:12.020Z",
+    "fromCache": false,
+    "queryDuration": "31.1s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/8HH45-2026-03-07T18-45-11-597Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "PH57",
+    "queryStatus": "not_found",
+    "totalRecords": 0,
+    "euRecords": 0,
+    "nonEURecords": 0,
+    "records": [],
+    "queryTime": "2026-03-07T18:45:48.660Z",
+    "fromCache": false,
+    "queryDuration": "31.2s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/PH57-2026-03-07T18-45-48-258Z.png",
+    "isInternational": false
+  },
+  {
+    "trademark": "AUTONEBULA",
+    "queryStatus": "found",
+    "totalRecords": 1,
+    "euRecords": 0,
+    "nonEURecords": 1,
+    "records": [
+      {
+        "brandName": "AUTONEBULA",
+        "owner": "AUTO NEBULA CAPITAL ADVISERS PRIVATE LIMITED (India",
+        "status": "Registered",
+        "statusDate": "February 13, 2017",
+        "country": "India",
+        "countryCode": "",
+        "regNumber": "3482289",
+        "regDate": "",
+        "niceClasses": [
+          "41",
+          "42"
+        ],
+        "isEU": false,
+        "isEurope": false,
+        "isInternational": false,
+        "designatedCountries": []
+      }
+    ],
+    "queryTime": "2026-03-07T18:46:50.550Z",
+    "fromCache": false,
+    "queryDuration": "56.0s",
+    "evidencePath": "/root/.openclaw/workspace/projects/wipo-trademark-batch/output/evidence/AUTONEBULA-2026-03-07T18-46-50-142Z.png",
+    "isInternational": false
+  }
+]

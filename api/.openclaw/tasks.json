@@ -1,0 +1,186 @@
+{
+  "version": "1.0",
+  "project": "wipo-api-enhancement",
+  "createdAt": "2026-03-06T10:28:00Z",
+  "updatedAt": "2026-03-06T10:46:35Z",
+  "body": "musk",
+  "status": "in_progress",
+  "phase": "exploration",
+  "tasks": [
+    {
+      "id": "R1-register-admin-routes",
+      "description": "在 api/src/server.js 中注册 admin 路由",
+      "status": "completed",
+      "priority": 1,
+      "dependencies": [],
+      "estimatedDuration": "5min",
+      "inputFiles": [
+        "api/src/server.js",
+        "api/src/routes/admin.js"
+      ],
+      "outputFiles": [
+        "api/src/server.js (modified)"
+      ],
+      "verificationCommand": "curl -s http://localhost:3000/api/v1/admin/health -H \"x-api-key: logotestkey\"",
+      "assignedTo": "tentacle-r1-register-admin",
+      "startedAt": "2026-03-06T10:43:00Z",
+      "completedAt": "2026-03-06T10:46:35Z",
+      "result": "Admin routes registered successfully. GET /api/v1/admin/health returns 200 OK.",
+      "notes": "Added require('./routes/admin') and app.use for /api/v1/admin route"
+    },
+    {
+      "id": "T1-explore-routes",
+      "description": "读取并分析所有 route 文件，列出所有 HTTP 端点",
+      "status": "completed",
+      "priority": 1,
+      "dependencies": [],
+      "estimatedDuration": "5min",
+      "inputFiles": [
+        "api/src/routes/tasks.js",
+        "api/src/routes/cache.js",
+        "api/src/routes/webhooks.js",
+        "api/src/routes/index.js (NOT FOUND)"
+      ],
+      "outputFiles": [
+        "api/.openclaw/findings/routes-analysis.json",
+        "api/.openclaw/findings/routes-analysis.md"
+      ],
+      "verificationCommand": "test -f api/.openclaw/findings/routes-analysis.json && echo 'OK' || echo 'MISSING'",
+      "assignedTo": "tentacle-t1-explore-routes",
+      "startedAt": "2026-03-06T10:31:00Z",
+      "completedAt": "2026-03-06T10:31:30Z",
+      "result": "Found 14 endpoints across 5 route files. index.js does not exist, admin.js not registered.",
+      "notes": "index.js was requested but does not exist - routes are registered directly in server.js. Also discovered admin.js (unregistered) and export.js."
+    },
+    {
+      "id": "T2-explore-controllers",
+      "description": "读取并分析所有 controller 文件，列出所有方法",
+      "status": "completed",
+      "priority": 1,
+      "dependencies": [],
+      "estimatedDuration": "5min",
+      "inputFiles": [
+        "api/src/controllers/taskController.js",
+        "api/src/controllers/cacheController.js",
+        "api/src/controllers/webhookController.js"
+      ],
+      "outputFiles": [
+        "api/.openclaw/findings/controllers-analysis.json",
+        "api/.openclaw/findings/controllers-analysis.md"
+      ],
+      "verificationCommand": "test -f api/.openclaw/findings/controllers-analysis.json && echo 'OK' || echo 'MISSING'",
+      "assignedTo": "tentacle-t2-explore-controllers",
+      "startedAt": "2026-03-06T10:30:00Z",
+      "completedAt": "2026-03-06T10:30:30Z",
+      "result": "Found 7 methods across 2 controller files. webhookController.js does not exist.",
+      "notes": "webhookController.js file not found - reports this to main agent"
+    },
+    {
+      "id": "T3-explore-services",
+      "description": "读取并分析所有 service 文件，列出所有公开方法",
+      "status": "completed",
+      "priority": 1,
+      "dependencies": [],
+      "estimatedDuration": "5min",
+      "inputFiles": [
+        "api/src/services/queueService.js",
+        "api/src/services/taskService.js"
+      ],
+      "outputFiles": [
+        "api/.openclaw/findings/services-analysis.json",
+        "api/.openclaw/findings/services-analysis.md"
+      ],
+      "verificationCommand": "test -f api/.openclaw/findings/services-analysis.json && echo 'OK' || echo 'MISSING'",
+      "assignedTo": "tentacle-t3-explore-services",
+      "startedAt": "2026-03-06T10:30:00Z",
+      "completedAt": "2026-03-06T10:30:45Z",
+      "result": "Found 19 methods across 3 service files. taskService.js does not exist.",
+      "notes": "Note: taskService.js was listed but not found; analyzed queueService.js, cacheService.js, webhookService.js instead"
+    },
+    {
+      "id": "T4-compare-routes-controllers",
+      "description": "对比 routes 和 controllers，找出映射缺口",
+      "status": "completed",
+      "priority": 2,
+      "dependencies": ["T1-explore-routes", "T2-explore-controllers"],
+      "estimatedDuration": "5min",
+      "inputFiles": [
+        "api/.openclaw/findings/routes-analysis.json",
+        "api/.openclaw/findings/controllers-analysis.json"
+      ],
+      "outputFiles": [
+        "api/.openclaw/findings/gap-analysis.json",
+        "api/.openclaw/findings/gap-analysis.md"
+      ],
+      "verificationCommand": "test -f api/.openclaw/findings/gap-analysis.json && echo 'OK' || echo 'MISSING'",
+      "assignedTo": "tentacle-t4-compare-gaps",
+      "startedAt": "2026-03-06T10:36:00Z",
+      "completedAt": "2026-03-06T10:36:30Z",
+      "result": "Found 10 gaps: 1 MISSING_CONTROLLER_FILE (exportController), 9 INLINE_CONTROLLER, 1 UNREGISTERED_ROUTE (admin.js)",
+      "notes": "All route-controller mappings analyzed. 7 routes matched successfully."
+    },
+    {
+      "id": "R2-create-webhook-controller",
+      "description": "创建 api/src/controllers/webhookController.js，重构 webhooks.js",
+      "status": "completed",
+      "priority": 2,
+      "dependencies": [],
+      "estimatedDuration": "10min",
+      "inputFiles": [
+        "api/src/routes/webhooks.js"
+      ],
+      "outputFiles": [
+        "api/src/controllers/webhookController.js (created)",
+        "api/src/routes/webhooks.js (modified)"
+      ],
+      "verificationCommand": "curl -s http://localhost:3000/api/v1/webhooks -H \"X-API-Key: logotestkey\"",
+      "assignedTo": "tentacle-r2-webhook-controller",
+      "startedAt": "2026-03-06T10:48:00Z",
+      "completedAt": "2026-03-06T10:48:59Z",
+      "result": "webhookController.js created with 4 functions. webhooks.js refactored to use controller. API returns 200 OK.",
+      "notes": "Extracted registerWebhook, listWebhooks, deleteWebhook, testWebhook to controller"
+    },
+    {
+      "id": "R3-create-admin-controller",
+      "description": "创建 api/src/controllers/adminController.js，重构 admin.js",
+      "status": "completed",
+      "priority": 2,
+      "dependencies": [],
+      "estimatedDuration": "10min",
+      "inputFiles": [
+        "api/src/routes/admin.js"
+      ],
+      "outputFiles": [
+        "api/src/controllers/adminController.js (created)",
+        "api/src/routes/admin.js (modified)"
+      ],
+      "verificationCommand": "curl -s http://localhost:3000/api/v1/admin/metrics?apiKey=logotestkey",
+      "assignedTo": "tentacle-r3-admin-controller",
+      "startedAt": "2026-03-06T10:49:00Z",
+      "completedAt": "2026-03-06T10:50:00Z",
+      "result": "adminController.js created with 5 functions. admin.js refactored to use controller. API returns 200 OK.",
+      "notes": "Extracted health, metrics, getAlerts, clearAlerts, status to controller"
+    },
+    {
+      "id": "T5-identify-enhancement-areas",
+      "description": "基于缺口分析，识别需要完善的具体功能点",
+      "status": "completed",
+      "priority": 2,
+      "dependencies": ["T3-explore-services", "T4-compare-routes-controllers"],
+      "estimatedDuration": "5min",
+      "inputFiles": [
+        "api/.openclaw/findings/services-analysis.json",
+        "api/.openclaw/findings/gap-analysis.json"
+      ],
+      "outputFiles": [
+        "api/.openclaw/findings/enhancement-plan.json"
+      ],
+      "verificationCommand": "test -f api/.openclaw/findings/enhancement-plan.json && echo 'OK' || echo 'MISSING'",
+      "assignedTo": "tentacle-t5-enhancement-plan",
+      "startedAt": "2026-03-06T10:40:00Z",
+      "completedAt": "2026-03-06T10:40:30Z",
+      "result": "Generated 3 tasks: (High) Register admin routes to server.js, (Medium) Refactor webhooks to controller, (Low) Refactor admin to controller",
+      "notes": "Note: exportController.js already exists with exportTask method - no creation needed"
+    }
+  ]
+}

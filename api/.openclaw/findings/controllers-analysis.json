@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-03-06T10:30:00.000Z",
+  "totalFiles": 3,
+  "filesFound": 2,
+  "filesMissing": ["api/src/controllers/webhookController.js"],
+  "totalMethods": 7,
+  "files": [
+    {
+      "file": "api/src/controllers/taskController.js",
+      "methods": [
+        {
+          "name": "create",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "创建任务 - 验证商标名称列表，创建任务记录并添加到队列"
+        },
+        {
+          "name": "getStatus",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "获取任务状态 - 根据 taskId 查询任务状态、进度和结果"
+        },
+        {
+          "name": "list",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "获取任务列表 - 分页查询任务列表及统计信息"
+        },
+        {
+          "name": "cancel",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "取消任务 - 取消处于 pending 状态的任务"
+        }
+      ]
+    },
+    {
+      "file": "api/src/controllers/cacheController.js",
+      "methods": [
+        {
+          "name": "get",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "获取缓存 - 查询商标名称的缓存数据，支持强制刷新"
+        },
+        {
+          "name": "delete",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "删除缓存 - 删除指定商标名称的缓存"
+        },
+        {
+          "name": "clearExpired",
+          "type": "async function",
+          "parameters": ["req", "res"],
+          "description": "清空过期缓存 - 清理所有过期的缓存条目"
+        }
+      ]
+    },
+    {
+      "file": "api/src/controllers/webhookController.js",
+      "exists": false,
+      "methods": []
+    }
+  ]
+}

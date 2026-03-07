@@ -1,0 +1,25 @@
+{
+  "name": "wipo-trademark-batch",
+  "version": "2.0.0",
+  "description": "WIPO Brand Database 欧盟商标批量查询工具 (窗口方式)",
+  "main": "src/query-trademarks.js",
+  "scripts": {
+    "start": "node src/query-trademarks.js",
+    "test": "node -e \"console.log('请使用 npm start 运行完整查询')\""
+  },
+  "keywords": [
+    "wipo",
+    "trademark",
+    "branddb",
+    "euipo",
+    "eu",
+    "batch",
+    "agent-browser"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.6",
+    "xlsx": "^0.18.5"
+  }
+}

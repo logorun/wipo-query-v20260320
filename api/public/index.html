@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WIPO 商标查询系统</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 登录页面 -->
+    <div id="login-page" class="page">
+      <div class="login-wrapper">
+        <div class="login-bg"></div>
+        <div class="login-container">
+          <div class="login-header">
+            <div class="logo">
+              <i class="fas fa-trademark"></i>
+            </div>
+            <h1>WIPO 商标查询</h1>
+            <p class="subtitle">欧盟商标批量查询平台</p>
+          </div>
+          <div class="login-form">
+            <div class="input-group">
+              <i class="fas fa-key"></i>
+              <input type="password" id="api-key" placeholder="请输入 API Key" />
+            </div>
+            <button onclick="login()" class="btn btn-primary btn-block">
+              <i class="fas fa-sign-in-alt"></i> 登录
+            </button>
+          </div>
+          <p class="hint">默认 Key: logotestkey</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 主应用页面 -->
+    <div id="main-page" class="page hidden">
+      <!-- 顶部导航栏 -->
+      <header class="app-header">
+        <div class="header-left">
+          <div class="logo">
+            <i class="fas fa-trademark"></i>
+            <span>WIPO Query</span>
+          </div>
+        </div>
+        <nav class="header-nav">
+          <button class="nav-item active" data-page="dashboard" onclick="showPage('dashboard')">
+            <i class="fas fa-chart-line"></i>
+            <span>概览</span>
+          </button>
+          <button class="nav-item" data-page="submit" onclick="showPage('submit')">
+            <i class="fas fa-plus-circle"></i>
+            <span>提交查询</span>
+          </button>
+          <button class="nav-item" data-page="tasks" onclick="showPage('tasks')">
+            <i class="fas fa-tasks"></i>
+            <span>任务列表</span>
+          </button>
+          <button class="nav-item" data-page="cache" onclick="showPage('cache')">
+            <i class="fas fa-database"></i>
+            <span>缓存查询</span>
+          </button>
+        </nav>
+        <div class="header-right">
+          <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+            <i class="fas fa-moon"></i>
+          </button>
+          <button class="logout-btn" onclick="logout()">
+            <i class="fas fa-sign-out-alt"></i>
+          </button>
+        </div>
+      </header>
+
+      <!-- 主内容区 -->
+      <main class="main-content">
+        <!-- 仪表盘页面 -->
+        <div id="dashboard-page" class="content-page">
+          <!-- 统计卡片 -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-icon pending">
+                <i class="fas fa-clock"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="stat-pending">0</span>
+                <span class="stat-label">等待中</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon processing">
+                <i class="fas fa-spinner fa-spin"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="stat-processing">0</span>
+                <span class="stat-label">处理中</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon completed">
+                <i class="fas fa-check-circle"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="stat-completed">0</span>
+                <span class="stat-label">已完成</span>
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon failed">
+                <i class="fas fa-times-circle"></i>
+              </div>
+              <div class="stat-info">
+                <span class="stat-value" id="stat-failed">0</span>
+                <span class="stat-label">失败</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 图表区域 -->
+          <div class="charts-row">
+            <div class="chart-card">
+              <h3><i class="fas fa-chart-pie"></i> 任务状态分布</h3>
+              <div class="chart-container">
+                <canvas id="statusChart"></canvas>
+              </div>
+            </div>
+            <div class="chart-card">
+              <h3><i class="fas fa-chart-bar"></i> 最近7天趋势</h3>
+              <div class="chart-container">
+                <canvas id="trendChart"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- 最近任务 -->
+          <div class="recent-tasks">
+            <div class="section-header">
+              <h3><i class="fas fa-history"></i> 最近任务</h3>
+              <button class="btn btn-sm" onclick="showPage('tasks')">查看全部</button>
+            </div>
+            <div class="tasks-list" id="recent-tasks-list">
+              <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <p>暂无任务</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 提交查询页面 -->
+        <div id="submit-page" class="content-page hidden">
+          <div class="page-header">
+            <h2><i class="fas fa-plus-circle"></i> 提交商标查询</h2>
+          </div>
+          <div class="submit-form-container">
+            <div class="form-card">
+              <div class="form-group">
+                <label>
+                  <i class="fas fa-list"></i> 商标列表（每行一个）
+                </label>
+                <textarea id="trademarks" rows="12" placeholder="例如：&#10;APPLE&#10;GOOGLE&#10;MICROSOFT&#10;AMAZON&#10;TESLA"></textarea>
+                <div class="input-hint">
+                  <span id="trademark-count">0</span> 个商标
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>
+                    <i class="fas fa-flag"></i> 优先级
+                  </label>
+                  <select id="priority">
+                    <option value="5">正常</option>
+                    <option value="10">最高</option>
+                    <option value="1">最低</option>
+                  </select>
+                </div>
+              </div>
+              <button onclick="submitTask()" class="btn btn-primary btn-lg">
+                <i class="fas fa-paper-plane"></i> 提交查询
+              </button>
+            </div>
+
+            <!-- 快速输入示例 -->
+            <div class="form-card quick-input">
+              <h4><i class="fas fa-bolt"></i> 快速示例</h4>
+              <div class="example-chips">
+                <button onclick="addExample('APPLE\nGOOGLE\nMICROSOFT')">科技巨头</button>
+                <button onclick="addExample('COKE\nPEPSI\nSPRITE')">饮料品牌</button>
+                <button onclick="addExample('NIKE\nADIDAS\nPUMA')">运动品牌</button>
+                <button onclick="addExample('BMW\nMERCEDES\nAUDI')">汽车品牌</button>
+              </div>
+            </div>
+
+            <div id="submit-result"></div>
+          </div>
+        </div>
+
+        <!-- 任务列表页面 -->
+        <div id="tasks-page" class="content-page hidden">
+          <div class="page-header">
+            <h2><i class="fas fa-tasks"></i> 查询任务列表</h2>
+            <div class="page-actions">
+              <div class="filter-group">
+                <select id="status-filter" onchange="loadTasks()">
+                  <option value="all">全部状态</option>
+                  <option value="pending">等待中</option>
+                  <option value="processing">处理中</option>
+                  <option value="completed">已完成</option>
+                  <option value="failed">失败</option>
+                </select>
+              </div>
+              <button onclick="loadTasks()" class="btn btn-icon" title="刷新">
+                <i class="fas fa-sync-alt"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>任务ID</th>
+                  <th>商标数量</th>
+                  <th>状态</th>
+                  <th>进度</th>
+                  <th>创建时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="tasks-table-body">
+                <tr>
+                  <td colspan="6" class="loading-cell">
+                    <i class="fas fa-spinner fa-spin"></i> 加载中...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pagination" id="pagination"></div>
+        </div>
+
+        <!-- 任务详情页面 -->
+        <div id="task-detail-page" class="content-page hidden">
+          <div class="page-header">
+            <button class="btn btn-back" onclick="showPage('tasks')">
+              <i class="fas fa-arrow-left"></i> 返回
+            </button>
+            <h2><i class="fas fa-info-circle"></i> 任务详情</h2>
+          </div>
+
+          <div class="task-detail-container">
+            <!-- 任务信息卡片 -->
+            <div class="task-info-grid">
+              <div class="info-card">
+                <div class="info-header">
+                  <i class="fas fa-tasks"></i>
+                  <span>任务信息</span>
+                </div>
+                <div class="info-content" id="task-info">
+                  <div class="skeleton-line"></div>
+                  <div class="skeleton-line"></div>
+                  <div class="skeleton-line"></div>
+                </div>
+              </div>
+              <div class="info-card">
+                <div class="info-header">
+                  <i class="fas fa-chart-line"></i>
+                  <span>进度统计</span>
+                </div>
+                <div class="info-content" id="task-stats">
+                  <div class="skeleton-line"></div>
+                  <div class="skeleton-line"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="action-buttons">
+              <button onclick="exportTask('csv')" class="btn btn-success">
+                <i class="fas fa-file-csv"></i> 导出 CSV
+              </button>
+              <button onclick="exportTask('excel')" class="btn btn-success">
+                <i class="fas fa-file-excel"></i> 导出 Excel
+              </button>
+              <button onclick="viewTask(window.currentTaskId)" class="btn">
+                <i class="fas fa-sync-alt"></i> 刷新
+              </button>
+            </div>
+
+            <!-- 结果表格 -->
+            <div class="results-section">
+              <h3><i class="fas fa-list"></i> 查询结果</h3>
+              <div id="task-results">
+                <div class="empty-state">
+                  <i class="fas fa-inbox"></i>
+                  <p>暂无结果</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 缓存查询页面 -->
+        <div id="cache-page" class="content-page hidden">
+          <div class="page-header">
+            <h2><i class="fas fa-database"></i> 缓存查询</h2>
+          </div>
+
+          <div class="cache-search-container">
+            <div class="search-box">
+              <i class="fas fa-search"></i>
+              <input type="text" id="cache-trademark" placeholder="输入商标名称进行查询" />
+              <button onclick="queryCache()" class="btn btn-primary">
+                <i class="fas fa-search"></i> 查询
+              </button>
+              <button onclick="forceRefresh()" class="btn btn-warning">
+                <i class="fas fa-bolt"></i> 强制刷新
+              </button>
+            </div>
+          </div>
+
+          <div id="cache-result"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Toast 通知容器 -->
+  <div id="toast-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

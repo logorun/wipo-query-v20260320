@@ -1,0 +1,27 @@
+# Logs
+logs/
+*.log
+
+# Output files (generated reports)
+output/reports/
+output/evidence/
+
+# Node modules
+node_modules/
+
+# Database files
+*.db
+*.db-journal
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*~

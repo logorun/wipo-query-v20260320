@@ -1,0 +1,142 @@
+{
+  "generatedAt": "2026-03-06T10:30:00.000Z",
+  "totalFiles": 3,
+  "totalMethods": 19,
+  "files": [
+    {
+      "file": "api/src/services/queueService.js",
+      "exports": [
+        "queryQueue",
+        "addTaskToQueue",
+        "getQueueStats",
+        "getJob",
+        "cleanOldJobs",
+        "pauseQueue",
+        "resumeQueue",
+        "gracefulShutdown",
+        "healthCheck",
+        "waitForConnection",
+        "connectionState"
+      ],
+      "methods": [
+        {
+          "name": "queryQueue",
+          "type": "object",
+          "description": "Bull 队列实例，直接导出队列对象"
+        },
+        {
+          "name": "addTaskToQueue",
+          "type": "function",
+          "description": "添加任务到队列，包含 Redis 连接检查和自动重连"
+        },
+        {
+          "name": "getQueueStats",
+          "type": "function",
+          "description": "获取队列统计信息（等待中/进行中/已完成/失败/延迟任务数）"
+        },
+        {
+          "name": "getJob",
+          "type": "function",
+          "description": "根据 jobId 获取任务详情"
+        },
+        {
+          "name": "cleanOldJobs",
+          "type": "function",
+          "description": "清理已完成（24小时）和失败（7天）的旧任务"
+        },
+        {
+          "name": "pauseQueue",
+          "type": "function",
+          "description": "暂停队列，不再接受新任务"
+        },
+        {
+          "name": "resumeQueue",
+          "type": "function",
+          "description": "恢复队列，继续处理任务"
+        },
+        {
+          "name": "gracefulShutdown",
+          "type": "function",
+          "description": "优雅关闭：暂停队列，等待活跃任务完成，然后关闭连接"
+        },
+        {
+          "name": "healthCheck",
+          "type": "function",
+          "description": "健康检查：验证 Redis 连接状态"
+        },
+        {
+          "name": "waitForConnection",
+          "type": "function",
+          "description": "等待队列连接就绪，支持超时控制"
+        },
+        {
+          "name": "connectionState",
+          "type": "object",
+          "description": "连接状态对象，包含 isConnected、lastError、reconnectAttempts 等"
+        }
+      ]
+    },
+    {
+      "file": "api/src/services/cacheService.js",
+      "exports": ["cacheService"],
+      "methods": [
+        {
+          "name": "cacheService.get",
+          "type": "function",
+          "description": "获取缓存数据，返回缓存是否命中、缓存信息（创建时间/过期时间/命中率）和数据"
+        },
+        {
+          "name": "cacheService.set",
+          "type": "function",
+          "description": "设置缓存数据，默认 TTL 为 24 小时"
+        },
+        {
+          "name": "cacheService.delete",
+          "type": "function",
+          "description": "删除指定商标的缓存"
+        },
+        {
+          "name": "cacheService.clearExpired",
+          "type": "function",
+          "description": "清空所有过期的缓存条目"
+        }
+      ]
+    },
+    {
+      "file": "api/src/services/webhookService.js",
+      "exports": ["WebhookService instance"],
+      "methods": [
+        {
+          "name": "registerWebhook",
+          "type": "async function",
+          "description": "注册新的 Webhook，包含自动生成 secret 和唯一 ID"
+        },
+        {
+          "name": "deleteWebhook",
+          "type": "async function",
+          "description": "根据 ID 删除 Webhook"
+        },
+        {
+          "name": "listWebhooks",
+          "type": "function",
+          "description": "列出所有已注册的 Webhook（不包含 secret）"
+        },
+        {
+          "name": "sendWebhook",
+          "type": "async function",
+          "description": "发送 Webhook 事件，支持重试机制（最多 3 次）"
+        },
+        {
+          "name": "notifyTaskCompleted",
+          "type": "async function",
+          "description": "发送任务完成通知，包含 taskId、trademarks、resultsCount"
+        },
+        {
+          "name": "notifyTaskFailed",
+          "type": "async function",
+          "description": "发送任务失败通知，包含 taskId 和错误信息"
+        }
+      ]
+    }
+  ]
+}
