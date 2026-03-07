@@ -79,6 +79,25 @@ class WipoAPI {
         return this.request(`/tasks/${taskId}/delete`, { method: 'DELETE' });
     }
 
+    async batchExport(taskIds, filter) {
+        const url = `${API_BASE}/export/batch?apiKey=${API_KEY}`;
+        const body = { taskIds };
+        if (filter) body.filter = filter;
+        
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        
+        if (!response.ok) {
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text}`);
+        }
+        
+        return response.blob();
+    }
+
     async health() {
         try {
             const response = await fetch(HEALTH_URL);

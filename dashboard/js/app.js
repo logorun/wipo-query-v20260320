@@ -77,7 +77,7 @@ function updateTaskList() {
   console.log('[DEBUG] filteredTasks:', filteredTasks.length);
   
   if (filteredTasks.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-slate-500">暂无数据</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-slate-500">暂无数据</td></tr>';
     return;
   }
   
@@ -107,6 +107,7 @@ function updateTaskList() {
     const actionButtons = viewBtn + actionBtn + deleteBtn;
     
     row.innerHTML = `
+      <td class="py-3"><input type="checkbox" class="task-checkbox" data-task-id="${task.id}" onchange="updateSelection()"></td>
       <td class="py-3 font-mono text-sm">${task.id.slice(0, 8)}...</td>
       <td class="py-3">${task.trademarks?.length || 0}个</td>
       <td class="py-3">
@@ -184,6 +185,85 @@ async function deleteTaskHandler(taskId) {
     await refreshData();
   } catch (error) {
     alert('删除任务失败: ' + error.message);
+  }
+}
+
+let selectedTasks = new Set();
+
+function updateSelection() {
+  selectedTasks.clear();
+  const checkboxes = document.querySelectorAll('.task-checkbox');
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      selectedTasks.add(cb.getAttribute('data-task-id'));
+    }
+  });
+  
+  const countEl = document.getElementById('selected-count');
+  const batchBar = document.getElementById('batch-ops-bar');
+  
+  if (countEl) {
+    countEl.textContent = selectedTasks.size;
+  }
+  
+  if (batchBar) {
+    if (selectedTasks.size > 0) {
+      batchBar.classList.remove('hidden');
+    } else {
+      batchBar.classList.add('hidden');
+    }
+  }
+}
+
+function toggleSelectAll() {
+  const selectAllCb = document.getElementById('select-all');
+  const checkboxes = document.querySelectorAll('.task-checkbox');
+  
+  checkboxes.forEach(cb => {
+    cb.checked = selectAllCb.checked;
+  });
+  
+  updateSelection();
+}
+
+function clearSelection() {
+  const selectAllCb = document.getElementById('select-all');
+  const checkboxes = document.querySelectorAll('.task-checkbox');
+  
+  if (selectAllCb) {
+    selectAllCb.checked = false;
+  }
+  
+  checkboxes.forEach(cb => {
+    cb.checked = false;
+  });
+  
+  selectedTasks.clear();
+  updateSelection();
+}
+
+async function batchExport() {
+  if (selectedTasks.size === 0) {
+    alert('请至少选择一个任务');
+    return;
+  }
+  
+  const taskIds = Array.from(selectedTasks);
+  const filter = currentFilter !== 'all' ? currentFilter : undefined;
+  
+  try {
+    const blob = await api.batchExport(taskIds, filter);
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `batch-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    alert(`已导出 ${taskIds.length} 个任务的数据`);
+  } catch (error) {
+    alert('批量导出失败: ' + error.message);
   }
 }
 
