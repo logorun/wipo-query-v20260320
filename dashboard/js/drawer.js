@@ -314,6 +314,22 @@ class TaskDrawer {
       parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">记录数量:</span> <span class="text-white">${result.records.length}</span></p>`);
     }
     
+    // === Country Statistics ===
+    if (result.records && result.records.length > 0) {
+      const euRecords = result.records.filter(r => r.isEU);
+      const nonEuRecords = result.records.filter(r => !r.isEU);
+      
+      if (euRecords.length > 0) {
+        const euCountries = [...new Set(euRecords.map(r => r.countryCode).filter(Boolean))];
+        parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">欧盟记录:</span> <span class="text-green-400">${euRecords.length}</span> <span class="text-slate-400">(${euCountries.join(', ')})</span></p>`);
+      }
+      
+      if (nonEuRecords.length > 0) {
+        const nonEuCountries = [...new Set(nonEuRecords.map(r => r.countryCode).filter(Boolean))];
+        parts.push(`<p class="text-slate-300 text-sm"><span class="text-slate-500">非欧盟:</span> <span class="text-yellow-400">${nonEuRecords.length}</span> <span class="text-slate-400">(${nonEuCountries.join(', ')})</span></p>`);
+      }
+    }
+    
     if (result.error) {
       parts.push(`<p class="text-red-400 text-sm mt-2"><span class="text-slate-500">错误信息:</span> ${result.error}</p>`);
     }
