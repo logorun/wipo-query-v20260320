@@ -3,20 +3,41 @@ const API_KEY = 'logotestkey';
 
 class WipoAPI {
     async request(endpoint, options = {}) {
-        const url = \`\${API_BASE}\${endpoint}\`;
+        let url = `${API_BASE}${endpoint}`;
+        
+        // Add API key as query parameter
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}apiKey=${API_KEY}`;
+        
         const headers = {
             'Content-Type': 'application/json',
-            'X-API-Key': API_KEY,
             ...options.headers
         };
+        
+        console.log('[API] Requesting:', url);
+        
         try {
             const response = await fetch(url, { ...options, headers });
-            if (!response.ok) throw new Error(\`HTTP \${response.status}\`);
+            if (!response.ok) {
+                const text = await response.text();
+                console.error('[API] Error response:', text);
+                throw new Error(`HTTP ${response.status}`);
+            }
             return await response.json();
         } catch (error) {
-            console.error('API Error:', error);
+            console.error('[API] Error:', error);
             throw error;
         }
+    }
+
+    async getTasks(status = 'all', limit = 50) {
+        const params = new URLSearchParams({ status, limit });
+        return this.request(`/tasks?${params.toString()}`);
+    }
+
+    async getTask(taskId) {
+        return this.request(`/tasks/${taskId}`);
+    }
     }
 
     async getTasks(status = 'all', limit = 50) {
