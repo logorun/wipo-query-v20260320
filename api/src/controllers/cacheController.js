@@ -32,6 +32,9 @@ const cacheController = {
 
     const normalizedTrademark = trademark.trim().toUpperCase();
 
+    // 暂时禁用强制刷新功能 - 2026-03-08
+    // 启用方式：取消下方代码的注释
+    /*
     // 强制刷新
     if (forceRefresh === 'true') {
       await cacheService.delete(normalizedTrademark);
@@ -52,6 +55,18 @@ const cacheController = {
           refreshInitiated: true,
           taskId,
           message: 'Refresh queued, use taskId to track progress'
+        }
+      });
+    }
+    */
+
+    // 强制刷新功能已禁用
+    if (forceRefresh === 'true') {
+      return res.status(503).json({
+        success: false,
+        error: {
+          code: 'FEATURE_DISABLED',
+          message: 'Cache force refresh feature is temporarily disabled'
         }
       });
     }
