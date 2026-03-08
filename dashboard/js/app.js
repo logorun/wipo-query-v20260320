@@ -318,6 +318,9 @@ document.getElementById('export-modal')?.addEventListener('click', (e) => {
 
 let extractedTrademarks = [];
 let selectedTrademarks = new Set();
+let currentUploadFile = null;
+let currentUploadData = null;
+let uploadEventSource = null;
 
 async function handleFileSelect(event) {
     const file = event.target.files[0];
@@ -332,47 +335,282 @@ async function handleFileSelect(event) {
         const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
         
         if (!jsonData || jsonData.length === 0) {
-            alert('Excel 文件为空');
+            showToast('Excel 文件为空', 'error');
             document.getElementById('file-name').textContent = '';
+            event.target.value = '';
             return;
         }
         
         document.getElementById('file-name').textContent = file.name + ` (${jsonData.length} 行)`;
         
-        const result = await api.extractFromData(jsonData, file.name);
+        currentUploadFile = file;
+        currentUploadData = jsonData;
         
-        if (!result.success) {
-            alert('未能从文件中提取到商标，请检查文件格式');
-            event.target.value = '';
-            return;
-        }
-
-        // Handle auto-split response
-        if (result.data.needsSplit === true) {
-            const taskList = result.data.tasks.map(t => 
-                `任务 ${t.batchIndex + 1}/${result.data.batchCount}: ${t.trademarkCount} 个商标 (ID: ${t.taskId.slice(0, 8)}...) `
-            ).join('\n');
-            
-            alert(`文件已成功分割为 ${result.data.batchCount} 个任务:\n\n${taskList}\n\n所有任务已自动创建并加入队列。`);
-            await refreshData();
-            event.target.value = '';
-            return;
-        }
-
-        // No split needed - show trademark selection modal
-        if (result.data.trademarks && result.data.trademarks.length > 0) {
-            extractedTrademarks = result.data.trademarks;
-            selectedTrademarks = new Set(extractedTrademarks);
-            showTrademarkConfirmationModal(result.data);
-        } else {
-            alert('未能从文件中提取到商标，请检查文件格式');
-        }
+        showUploadConfirmationModal(file, jsonData);
     } catch (error) {
         console.error('File processing error:', error);
-        alert('文件处理失败: ' + error.message);
+        showToast('文件处理失败: ' + error.message, 'error');
     }
     
     event.target.value = '';
+}
+
+function showUploadConfirmationModal(file, data) {
+    const modal = document.getElementById('upload-modal');
+    const stagePreview = document.getElementById('upload-stage-preview');
+    const stageProcessing = document.getElementById('upload-stage-processing');
+    
+    stagePreview.classList.remove('hidden');
+    stageProcessing.classList.add('hidden');
+    
+    document.getElementById('upload-file-name').textContent = file.name;
+    document.getElementById('upload-file-info').textContent = `${formatFileSize(file.size)} · ${data.length} 行`;
+    document.getElementById('preview-row-count').textContent = data.length;
+    document.getElementById('preview-tm-count').textContent = '~' + Math.floor(data.length * 0.3);
+    
+    renderExcelPreview(data);
+    
+    const priorityInput = document.getElementById('opt-priority');
+    const priorityValue = document.getElementById('priority-value');
+    priorityInput.oninput = () => {
+        priorityValue.textContent = priorityInput.value;
+    };
+    
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function renderExcelPreview(data) {
+    const headerRow = document.getElementById('excel-preview-header');
+    const body = document.getElementById('excel-preview-body');
+    
+    headerRow.innerHTML = '';
+    body.innerHTML = '';
+    
+    const previewRows = Math.min(data.length, 50);
+    const rows = data.slice(0, previewRows);
+    
+    if (rows.length === 0) return;
+    
+    const firstRow = rows[0];
+    const colCount = Math.min(firstRow.length || 1, 10);
+    
+    for (let i = 0; i < colCount; i++) {
+        const th = document.createElement('th');
+        th.textContent = firstRow[i] || `列 ${i + 1}`;
+        th.className = 'px-4 py-3';
+        headerRow.appendChild(th);
+    }
+    
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-slate-700/50';
+        
+        for (let j = 0; j < colCount; j++) {
+            const td = document.createElement('td');
+            td.textContent = row[j] || '';
+            td.className = 'px-4 py-2 text-slate-400';
+            tr.appendChild(td);
+        }
+        
+        body.appendChild(tr);
+    }
+    
+    if (data.length > 50) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="${colCount}" class="px-4 py-3 text-center text-slate-500 italic">... 还有 ${data.length - 50} 行数据 ...</td>`;
+        body.appendChild(tr);
+    }
+}
+
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+function closeUploadModal() {
+    const modal = document.getElementById('upload-modal');
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+    
+    if (uploadEventSource) {
+        uploadEventSource.close();
+        uploadEventSource = null;
+    }
+    
+    currentUploadFile = null;
+    currentUploadData = null;
+}
+
+async function startProcessing() {
+    const autoSplit = document.getElementById('opt-auto-split').checked;
+    const priority = parseInt(document.getElementById('opt-priority').value);
+    
+    document.getElementById('upload-stage-preview').classList.add('hidden');
+    document.getElementById('upload-stage-processing').classList.remove('hidden');
+    
+    resetConsole();
+    updateProgress(0, '准备开始处理...');
+    
+    appendToConsole('system', '初始化 AI 处理流程...');
+    appendToConsole('info', `文件: ${currentUploadFile.name}`);
+    appendToConsole('info', `数据行数: ${currentUploadData.length}`);
+    appendToConsole('info', `自动拆分: ${autoSplit ? '开启' : '关闭'}`);
+    appendToConsole('info', `任务优先级: ${priority}`);
+    
+    try {
+        await processWithSSE(currentUploadData, currentUploadFile.name, { autoSplit, priority });
+    } catch (error) {
+        console.error('Processing error:', error);
+        appendToConsole('error', `处理失败: ${error.message}`);
+        updateProgress(100, '处理失败');
+        showCompletionButtons();
+    }
+}
+
+async function processWithSSE(data, fileName, options) {
+    const API_BASE = 'http://95.134.250.48:3000/api/v1';
+    const API_KEY = 'logotestkey';
+    
+    const url = new URL(`${API_BASE}/extract/stream`);
+    url.searchParams.append('apiKey', API_KEY);
+    
+    const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data, fileName, options })
+    });
+    
+    if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+    }
+    
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    
+    appendToConsole('system', '开始流式接收处理结果...');
+    
+    let buffer = '';
+    
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        
+        for (const line of lines) {
+            if (line.trim().startsWith('data: ')) {
+                try {
+                    const event = JSON.parse(line.trim().substring(6));
+                    handleStreamEvent(event);
+                } catch (e) {
+                    console.error('Parse error:', line);
+                }
+            }
+        }
+    }
+}
+
+function handleStreamEvent(event) {
+    switch (event.type) {
+        case 'log':
+            appendToConsole(event.level || 'info', event.message);
+            break;
+        case 'progress':
+            updateProgress(event.percent, event.message);
+            break;
+        case 'trademark':
+            document.getElementById('stat-extracted').textContent = event.count;
+            appendToConsole('success', `提取到商标: ${event.name}`);
+            break;
+        case 'task':
+            document.getElementById('stat-tasks').textContent = event.current;
+            appendToConsole('info', `任务 ${event.current}/${event.total} 创建成功 (ID: ${event.id.slice(0, 8)}...)`);
+            break;
+        case 'complete':
+            updateProgress(100, '处理完成！');
+            appendToConsole('success', `✓ 处理完成！共提取 ${event.totalTrademarks} 个商标，创建 ${event.totalTasks} 个任务`);
+            showCompletionButtons();
+            break;
+        case 'error':
+            appendToConsole('error', event.message);
+            break;
+    }
+}
+
+function updateProgress(percent, message) {
+    const bar = document.getElementById('progress-bar');
+    const text = document.getElementById('progress-percent');
+    const status = document.getElementById('progress-status');
+    
+    bar.style.width = percent + '%';
+    text.textContent = Math.round(percent) + '%';
+    status.innerHTML = `<span class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>${message}`;
+}
+
+function resetConsole() {
+    const output = document.getElementById('console-output');
+    output.innerHTML = '<div class="text-slate-500 italic">Waiting for process to start...</div>';
+    document.getElementById('stat-extracted').textContent = '0';
+    document.getElementById('stat-tasks').textContent = '0';
+}
+
+function appendToConsole(level, message) {
+    const output = document.getElementById('console-output');
+    const emptyMsg = output.querySelector('.italic');
+    if (emptyMsg) emptyMsg.remove();
+    
+    const line = document.createElement('div');
+    line.className = `console-line console-${level}`;
+    
+    const now = new Date();
+    const time = now.toLocaleTimeString('zh-CN', { hour12: false });
+    
+    let prefix = '>';
+    if (level === 'success') prefix = '✓';
+    if (level === 'error') prefix = '✗';
+    if (level === 'warn') prefix = '!';
+    if (level === 'system') prefix = '►';
+    
+    line.innerHTML = `<span class="console-timestamp">[${time}]</span> <span class="console-prefix">${prefix}</span> ${escapeHtml(message)}`;
+    
+    output.appendChild(line);
+    output.scrollTop = output.scrollHeight;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function showCompletionButtons() {
+    const footer = document.getElementById('processing-footer');
+    footer.classList.remove('hidden');
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `fixed bottom-4 right-4 px-6 py-3 rounded-lg text-white font-medium transform transition-all duration-300 translate-y-10 opacity-0 z-50 ${
+        type === 'error' ? 'bg-red-500' : type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-10', 'opacity-0');
+    });
+    
+    setTimeout(() => {
+        toast.classList.add('translate-y-10', 'opacity-0');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
 }
 
 function fileToBase64(file) {

@@ -9,6 +9,14 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const logger = new Logger('extractController');
 const BATCH_SIZE = 250;
 
+function sendSSE(res, data) {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 const extractController = {
   extractFromExcel: asyncHandler(async (req, res) => {
     const { fileContent, fileName } = req.body;
@@ -203,7 +211,158 @@ const extractController = {
         }
       });
     }
-  })
+  }),
+
+  extractStream: async (req, res) => {
+    const { data, fileName, options = {} } = req.body;
+    const { autoSplit = true, priority = 5 } = options;
+
+    if (!data || !Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: { code: 'MISSING_DATA', message: 'Data array is required' }
+      });
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    try {
+      logger.info('Stream processing started', { fileName, rows: data.length });
+      
+      sendSSE(res, { type: 'log', level: 'system', message: '读取 Excel 文件...' });
+      await sleep(300);
+      
+      sendSSE(res, { type: 'log', level: 'info', message: `检测到 ${data.length} 行数据` });
+      sendSSE(res, { type: 'progress', percent: 10, message: 'AI 开始提取商标...' });
+      await sleep(200);
+
+      const trademarks = await aiService.extractTrademarks(data);
+
+      if (trademarks.length === 0) {
+        sendSSE(res, { type: 'error', message: '未能从文件中提取到商标' });
+        sendSSE(res, { type: 'complete', totalTrademarks: 0, totalTasks: 0 });
+        return res.end();
+      }
+
+      sendSSE(res, { type: 'log', level: 'success', message: `AI 提取完成，发现 ${trademarks.length} 个潜在商标` });
+      
+      const progressPerTrademark = 40 / trademarks.length;
+      for (let i = 0; i < trademarks.length; i++) {
+        sendSSE(res, { 
+          type: 'trademark', 
+          name: trademarks[i], 
+          count: i + 1 
+        });
+        if (i % 5 === 0) {
+          sendSSE(res, { 
+            type: 'progress', 
+            percent: 10 + (i * progressPerTrademark), 
+            message: `正在提取商标... (${i + 1}/${trademarks.length})` 
+          });
+        }
+        await sleep(50);
+      }
+
+      sendSSE(res, { type: 'log', level: 'success', message: `共提取 ${trademarks.length} 个商标` });
+      sendSSE(res, { type: 'progress', percent: 50, message: '准备创建任务...' });
+
+      const shouldSplit = autoSplit && trademarks.length > BATCH_SIZE;
+      
+      if (shouldSplit) {
+        const totalBatches = Math.ceil(trademarks.length / BATCH_SIZE);
+        sendSSE(res, { type: 'log', level: 'info', message: `自动拆分为 ${totalBatches} 个任务` });
+        
+        const progressPerBatch = 45 / totalBatches;
+        
+        for (let i = 0; i < totalBatches; i++) {
+          const start = i * BATCH_SIZE;
+          const end = start + BATCH_SIZE;
+          const batchTrademarks = trademarks.slice(start, end);
+          
+          const taskId = uuidv4();
+          const task = {
+            id: taskId,
+            trademarks: batchTrademarks.map(t => t.trim().toUpperCase()),
+            status: 'pending',
+            priority: priority,
+            callbackUrl: null,
+            userId: req.user?.id || null,
+            orgId: req.user?.orgId || null,
+            planType: req.user?.plan || 'free',
+            metadata: JSON.stringify({
+              batchIndex: i,
+              totalBatches: totalBatches,
+              sourceFile: fileName
+            })
+          };
+
+          await taskDB.create(task);
+          await addTaskToQueue(taskId, task.trademarks, task.priority);
+
+          sendSSE(res, { 
+            type: 'task', 
+            current: i + 1, 
+            total: totalBatches, 
+            id: taskId 
+          });
+          
+          sendSSE(res, { 
+            type: 'progress', 
+            percent: 50 + ((i + 1) * progressPerBatch), 
+            message: `创建任务 ${i + 1}/${totalBatches}...` 
+          });
+          
+          logger.info('Stream created batch task', { taskId, batchIndex: i });
+          await sleep(100);
+        }
+
+        sendSSE(res, { 
+          type: 'complete', 
+          totalTrademarks: trademarks.length, 
+          totalTasks: totalBatches 
+        });
+      } else {
+        const taskId = uuidv4();
+        const task = {
+          id: taskId,
+          trademarks: trademarks.map(t => t.trim().toUpperCase()),
+          status: 'pending',
+          priority: priority,
+          callbackUrl: null,
+          userId: req.user?.id || null,
+          orgId: req.user?.orgId || null,
+          planType: req.user?.plan || 'free',
+          metadata: JSON.stringify({ sourceFile: fileName })
+        };
+
+        await taskDB.create(task);
+        await addTaskToQueue(taskId, task.trademarks, task.priority);
+
+        sendSSE(res, { type: 'task', current: 1, total: 1, id: taskId });
+        sendSSE(res, { type: 'progress', percent: 95, message: '任务创建成功' });
+        
+        logger.info('Stream created single task', { taskId, trademarkCount: trademarks.length });
+        
+        await sleep(200);
+        
+        sendSSE(res, { 
+          type: 'complete', 
+          totalTrademarks: trademarks.length, 
+          totalTasks: 1 
+        });
+      }
+
+      res.end();
+    } catch (error) {
+      logger.error('Stream processing failed', { error: error.message });
+      sendSSE(res, { type: 'error', message: error.message });
+      sendSSE(res, { type: 'complete', totalTrademarks: 0, totalTasks: 0, error: true });
+      res.end();
+    }
+  }
 };
 
 module.exports = extractController;

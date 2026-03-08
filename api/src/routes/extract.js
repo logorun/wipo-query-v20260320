@@ -13,4 +13,9 @@ router.post('/data',
   extractController.extractFromData
 );
 
+router.post('/stream',
+  taskSubmitLimiter,
+  extractController.extractStream
+);
+
 module.exports = router;

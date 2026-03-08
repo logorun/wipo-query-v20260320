@@ -222,6 +222,176 @@
         </div>
     </div>
 
+    <!-- Upload Confirmation & Processing Modal -->
+    <div id="upload-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 hidden opacity-0 transition-opacity duration-300">
+        <div class="glass rounded-2xl w-full max-w-5xl max-h-[90vh] flex flex-col transform scale-95 transition-transform duration-300" id="upload-modal-content">
+            <!-- Header -->
+            <div class="p-6 border-b border-white/10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center border border-purple-500/30">
+                            <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-xl font-semibold text-white">确认上传</h3>
+                            <p class="text-slate-400 text-sm mt-0.5">
+                                <span id="upload-file-name" class="text-purple-400"></span>
+                                <span id="upload-file-info" class="ml-2"></span>
+                            </p>
+                        </div>
+                    </div>
+                    <button onclick="closeUploadModal()" class="text-slate-400 hover:text-white text-2xl transition-colors">&times;</button>
+                </div>
+            </div>
+            
+            <!-- Stage 1: Preview Confirmation -->
+            <div id="upload-stage-preview" class="flex-1 overflow-hidden flex flex-col">
+                <div class="flex-1 flex overflow-hidden">
+                    <!-- Left: Data Preview -->
+                    <div class="flex-1 p-6 overflow-auto border-r border-white/10">
+                        <h4 class="text-slate-300 font-medium mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            数据预览
+                        </h4>
+                        <div id="excel-preview-container" class="overflow-auto rounded-lg border border-slate-700 bg-slate-900/50">
+                            <table id="excel-preview-table" class="w-full text-sm text-left text-slate-300">
+                                <thead class="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
+                                    <tr id="excel-preview-header"></tr>
+                                </thead>
+                                <tbody id="excel-preview-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Right: Options -->
+                    <div class="w-80 p-6 bg-slate-900/30">
+                        <h4 class="text-slate-300 font-medium mb-4 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                            处理选项
+                        </h4>
+                        
+                        <div class="space-y-4">
+                            <!-- Auto Split Option -->
+                            <div class="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" id="opt-auto-split" checked class="w-5 h-5 rounded border-slate-600 text-purple-500 focus:ring-purple-500/50 bg-slate-700">
+                                    <div class="flex-1">
+                                        <div class="text-white font-medium text-sm">自动拆分任务</div>
+                                        <div class="text-slate-400 text-xs mt-0.5">每 250 个商标一个任务</div>
+                                    </div>
+                                </label>
+                            </div>
+                            
+                            <!-- Priority Option -->
+                            <div class="p-4 rounded-lg bg-slate-800/50 border border-slate-700">
+                                <label class="block text-white font-medium text-sm mb-2">任务优先级</label>
+                                <input type="range" id="opt-priority" min="1" max="10" value="5" class="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500">
+                                <div class="flex justify-between text-xs text-slate-400 mt-1">
+                                    <span>低</span>
+                                    <span id="priority-value" class="text-purple-400 font-medium">5</span>
+                                    <span>高</span>
+                                </div>
+                            </div>
+                            
+                            <!-- File Stats -->
+                            <div class="p-4 rounded-lg bg-slate-800/30 border border-slate-700/50">
+                                <div class="flex justify-between text-sm mb-2">
+                                    <span class="text-slate-400">总行数</span>
+                                    <span id="preview-row-count" class="text-white font-medium">-</span>
+                                </div>
+                                <div class="flex justify-between text-sm">
+                                    <span class="text-slate-400">预估商标数</span>
+                                    <span id="preview-tm-count" class="text-purple-400 font-medium">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer -->
+                <div class="p-6 border-t border-white/10 flex justify-end gap-4 bg-slate-900/50">
+                    <button onclick="closeUploadModal()" class="px-6 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all">
+                        取消
+                    </button>
+                    <button onclick="startProcessing()" class="px-6 py-2.5 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white rounded-lg transition-all font-medium flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        开始处理
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Stage 2: Processing -->
+            <div id="upload-stage-processing" class="hidden flex-1 flex flex-col overflow-hidden">
+                <div class="p-6 flex-1 flex gap-6 overflow-hidden">
+                    <!-- Progress Section -->
+                    <div class="w-1/3 flex flex-col gap-6">
+                        <!-- Progress Card -->
+                        <div class="p-5 rounded-xl bg-slate-800/50 border border-slate-700">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="text-slate-400 text-sm">处理进度</span>
+                                <span id="progress-percent" class="text-2xl font-bold text-purple-400">0%</span>
+                            </div>
+                            <div class="h-3 bg-slate-700 rounded-full overflow-hidden">
+                                <div id="progress-bar" class="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-purple-500 transition-all duration-500 ease-out" style="width: 0%"></div>
+                            </div>
+                            <div id="progress-status" class="mt-3 text-slate-300 text-sm flex items-center gap-2">
+                                <span class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
+                                准备开始...
+                            </div>
+                        </div>
+                        
+                        <!-- Stats Cards -->
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="p-4 rounded-lg bg-slate-800/30 border border-slate-700/50">
+                                <div class="text-slate-400 text-xs mb-1">已提取商标</div>
+                                <div id="stat-extracted" class="text-xl font-bold text-green-400">0</div>
+                            </div>
+                            <div class="p-4 rounded-lg bg-slate-800/30 border border-slate-700/50">
+                                <div class="text-slate-400 text-xs mb-1">已创建任务</div>
+                                <div id="stat-tasks" class="text-xl font-bold text-blue-400">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Console Section -->
+                    <div class="flex-1 flex flex-col">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-slate-300 font-medium flex items-center gap-2">
+                                <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3"></path></svg>
+                                AI 处理日志
+                            </h4>
+                            <span class="text-xs text-slate-500 font-mono">Live</span>
+                        </div>
+                        <div id="console-container" class="flex-1 rounded-lg bg-[#0d1117] border border-slate-700 overflow-hidden flex flex-col">
+                            <div class="flex items-center gap-2 px-3 py-2 bg-[#161b22] border-b border-slate-700">
+                                <div class="w-3 h-3 rounded-full bg-red-500/80"></div>
+                                <div class="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+                                <div class="w-3 h-3 rounded-full bg-green-500/80"></div>
+                                <span class="ml-2 text-xs text-slate-500 font-mono">console.log</span>
+                            </div>
+                            <div id="console-output" class="flex-1 overflow-y-auto p-4 font-mono text-sm">
+                                <div class="text-slate-500 italic">Waiting for process to start...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Footer (hidden during processing, shown on complete) -->
+                <div id="processing-footer" class="hidden p-6 border-t border-white/10 flex justify-center gap-4 bg-slate-900/50">
+                    <button onclick="closeUploadModal(); refreshData();" class="px-6 py-2.5 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-lg transition-all">
+                        关闭
+                    </button>
+                    <button onclick="closeUploadModal(); refreshData();" class="px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white rounded-lg transition-all font-medium flex items-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        查看任务
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="js/api.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/drawer.js"></script>
