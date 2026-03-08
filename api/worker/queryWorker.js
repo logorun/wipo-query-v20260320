@@ -578,21 +578,30 @@ const doQueryTrademark = async (trademark, shouldSaveEvidence) => {
 };
 
 /**
- * 处理队列任务
+ * 处理队列任务 - 支持并发处理 3 个任务
  */
-queryQueue.process(async (job) => {
+queryQueue.process(3, async (job) => {
   const { taskId, trademarks } = job.data;
   const jobLogger = logger.child(`job-${job.id}`);
   
-  jobLogger.info('Processing job', { 
+  jobLogger.info('[DEBUG] Worker received job', { 
+    jobId: job.id,
     taskId, 
-    trademarkCount: trademarks.length 
+    trademarkCount: trademarks?.length,
+    data: job.data
   });
 
+  if (!trademarks || !Array.isArray(trademarks) || trademarks.length === 0) {
+    jobLogger.error('[DEBUG] Invalid job data - no trademarks', { jobData: job.data });
+    throw new Error('Invalid job data: trademarks array is required');
+  }
+
   // 更新任务状态为处理中
+  jobLogger.info('[DEBUG] Updating task status to processing', { taskId });
   await taskDB.updateStatus(taskId, 'processing', { 
     startedAt: new Date().toISOString() 
   });
+  jobLogger.info('[DEBUG] Task status updated to processing', { taskId });
 
   const results = [];
   let processed = 0;
@@ -679,7 +688,8 @@ queryQueue.process(async (job) => {
   }
 
   // 完成任务
-  jobLogger.info('Job completed', { 
+  jobLogger.info('[DEBUG] Job processing completed', { 
+    taskId,
     processed, 
     failed, 
     total: trademarks.length 
@@ -690,19 +700,33 @@ queryQueue.process(async (job) => {
     results,
     progress: { processed, failed, total: trademarks.length }
   });
+  
+  jobLogger.info('[DEBUG] Task status updated to completed', { taskId });
 
   return { taskId, processed, failed, results };
 });
 
 // 队列事件监听
 queryQueue.on('completed', (job) => {
-  logger.info('Job completed', { jobId: job.id });
+  logger.info('[DEBUG] Queue event: Job completed', { jobId: job.id, taskId: job.data?.taskId });
   metrics.increment('jobs_completed_total');
 });
 
 queryQueue.on('failed', (job, err) => {
-  logger.error('Job failed', { jobId: job.id, error: err.message });
+  logger.error('[DEBUG] Queue event: Job failed', { jobId: job.id, taskId: job.data?.taskId, error: err.message });
   metrics.increment('jobs_failed_total');
+});
+
+queryQueue.on('waiting', (jobId) => {
+  logger.info('[DEBUG] Queue event: Job waiting', { jobId });
+});
+
+queryQueue.on('active', (job) => {
+  logger.info('[DEBUG] Queue event: Job active', { jobId: job.id, taskId: job.data?.taskId });
+});
+
+queryQueue.on('stalled', (job) => {
+  logger.warn('[DEBUG] Queue event: Job stalled', { jobId: job.id, taskId: job.data?.taskId });
 });
 
 logger.info('🚀 Worker started with enhanced robustness', {
@@ -711,11 +735,33 @@ logger.info('🚀 Worker started with enhanced robustness', {
   validation: true
 });
 
+// Startup health check
+const performStartupCheck = async () => {
+  try {
+    const { healthCheck } = require('../src/services/queueService');
+    const health = await healthCheck();
+    
+    if (health.healthy) {
+      logger.info('[DEBUG] Worker startup check passed - Redis connected and queue ready');
+    } else {
+      logger.error('[DEBUG] Worker startup check failed - Redis not connected', { 
+        error: health.error,
+        state: health.state 
+      });
+      logger.error('[DEBUG] Tasks will NOT be processed until Redis connection is restored');
+    }
+  } catch (error) {
+    logger.error('[DEBUG] Worker startup health check error', { error: error.message });
+  }
+};
+
+performStartupCheck();
+
 // 启动时恢复队列（防止上次关闭时队列被暂停）
 queryQueue.resume().then(() => {
-  logger.info('Queue resumed');
+  logger.info('[DEBUG] Queue resumed successfully');
 }).catch(err => {
-  logger.warn('Failed to resume queue', { error: err.message });
+  logger.warn('[DEBUG] Failed to resume queue', { error: err.message });
 });
 
 // 优雅退出

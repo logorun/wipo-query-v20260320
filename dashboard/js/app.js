@@ -492,14 +492,20 @@ async function processWithSSE(data, fileName, options) {
     const API_BASE = 'http://95.134.250.48:3000/api/v1';
     const API_KEY = 'logotestkey';
     
+    console.log('[DEBUG] processWithSSE starting', { fileName, dataLength: data.length, options });
+    
     const url = new URL(`${API_BASE}/extract/stream`);
     url.searchParams.append('apiKey', API_KEY);
+    
+    console.log('[DEBUG] Fetching SSE from:', url.toString());
     
     const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data, fileName, options })
     });
+    
+    console.log('[DEBUG] SSE response received', { status: response.status, ok: response.ok });
     
     if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -509,12 +515,18 @@ async function processWithSSE(data, fileName, options) {
     const decoder = new TextDecoder();
     
     appendToConsole('system', '开始流式接收处理结果...');
+    console.log('[DEBUG] Starting to read SSE stream...');
     
     let buffer = '';
+    let eventCount = 0;
     
     while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        
+        if (done) {
+            console.log('[DEBUG] SSE stream done, total events:', eventCount);
+            break;
+        }
         
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
@@ -524,16 +536,22 @@ async function processWithSSE(data, fileName, options) {
             if (line.trim().startsWith('data: ')) {
                 try {
                     const event = JSON.parse(line.trim().substring(6));
+                    eventCount++;
+                    console.log('[DEBUG] SSE event received', { type: event.type, count: eventCount });
                     handleStreamEvent(event);
                 } catch (e) {
-                    console.error('Parse error:', line);
+                    console.error('[DEBUG] Parse error:', line, e);
                 }
             }
         }
     }
+    
+    console.log('[DEBUG] processWithSSE completed');
 }
 
 function handleStreamEvent(event) {
+    console.log('[DEBUG] Handling stream event:', event.type, event);
+    
     switch (event.type) {
         case 'log':
             appendToConsole(event.level || 'info', event.message);

@@ -66,7 +66,7 @@ const initQueue = () => {
     connectionState.isConnected = true;
     connectionState.lastError = null;
     connectionState.reconnectAttempts = 0;
-    logger.info('Redis connection ready');
+    logger.info('[DEBUG] Redis connection ready - Queue is operational');
     metrics.gauge('redis_connected', 1);
   });
 
@@ -74,12 +74,23 @@ const initQueue = () => {
     connectionState.isConnected = false;
     connectionState.lastError = error.message;
     connectionState.reconnectAttempts++;
-    logger.error('Redis connection error', { 
+    logger.error('[DEBUG] Redis connection error - Worker will not process tasks', { 
       error: error.message,
-      reconnectAttempts: connectionState.reconnectAttempts 
+      reconnectAttempts: connectionState.reconnectAttempts,
+      redisHost: config.redis.host,
+      redisPort: config.redis.port
     });
     metrics.gauge('redis_connected', 0);
     metrics.increment('redis_errors_total');
+  });
+  
+  queryQueue.on('connect', () => {
+    logger.info('[DEBUG] Redis client connected');
+  });
+  
+  queryQueue.on('close', () => {
+    logger.warn('[DEBUG] Redis connection closed');
+    connectionState.isConnected = false;
   });
 
   queryQueue.on('waiting', (jobId) => {
@@ -179,17 +190,22 @@ const waitForConnection = async (timeout = 30000) => {
  * 添加任务到队列
  */
 const addTaskToQueue = async (taskId, trademarks, priority = 5) => {
+  logger.info('[DEBUG] addTaskToQueue called', { taskId, trademarkCount: trademarks.length, priority, isConnected: connectionState.isConnected });
+  
   // 检查连接状态
   if (!connectionState.isConnected) {
-    logger.warn('Redis not connected, attempting to reconnect...');
+    logger.warn('[DEBUG] Redis not connected, attempting to reconnect...', { reconnectAttempts: connectionState.reconnectAttempts });
     try {
       await waitForConnection(10000);
+      logger.info('[DEBUG] Redis reconnected successfully');
     } catch (error) {
+      logger.error('[DEBUG] Redis reconnection failed', { error: error.message });
       throw new ExternalServiceError('Redis', 'Not connected, cannot add task', true);
     }
   }
 
   try {
+    logger.info('[DEBUG] Adding job to Bull queue', { taskId, priority: 11 - priority });
     const job = await queryQueue.add(
       { taskId, trademarks },
       {
@@ -198,7 +214,7 @@ const addTaskToQueue = async (taskId, trademarks, priority = 5) => {
       }
     );
     
-    logger.info(`Task added to queue`, { 
+    logger.info('[DEBUG] Job added to queue successfully', { 
       taskId, 
       jobId: job.id, 
       trademarkCount: trademarks.length 
@@ -207,7 +223,7 @@ const addTaskToQueue = async (taskId, trademarks, priority = 5) => {
     metrics.increment('tasks_created_total', { priority: priority.toString() });
     return job;
   } catch (error) {
-    logger.error(`Failed to add task to queue`, { taskId, error: error.message });
+    logger.error('[DEBUG] Failed to add task to queue', { taskId, error: error.message, stack: error.stack });
     throw new ExternalServiceError('Redis', `Failed to add task: ${error.message}`, true);
   }
 };

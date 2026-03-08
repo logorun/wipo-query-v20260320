@@ -2,7 +2,7 @@ const xlsx = require('xlsx');
 const { v4: uuidv4 } = require('uuid');
 const aiService = require('../services/aiService');
 const { taskDB } = require('../models/database');
-const { addTaskToQueue } = require('../services/queueService');
+const { addTaskToQueue, connectionState } = require('../services/queueService');
 const { Logger } = require('../utils/logger');
 const { asyncHandler } = require('../middleware/errorHandler');
 
@@ -217,7 +217,10 @@ const extractController = {
     const { data, fileName, options = {} } = req.body;
     const { autoSplit = true, priority = 5 } = options;
 
+    logger.info('[DEBUG] extractStream called', { fileName, dataLength: data?.length, options, redisConnected: connectionState.isConnected });
+
     if (!data || !Array.isArray(data) || data.length === 0) {
+      logger.error('[DEBUG] Invalid data received', { data: typeof data, isArray: Array.isArray(data) });
       return res.status(400).json({
         success: false,
         error: { code: 'MISSING_DATA', message: 'Data array is required' }
@@ -230,11 +233,18 @@ const extractController = {
     res.setHeader('X-Accel-Buffering', 'no');
 
     const sendSSE = (eventData) => {
+      logger.info('[DEBUG] Sending SSE event', { type: eventData.type, percent: eventData.percent });
       res.write(`data: ${JSON.stringify(eventData)}\n\n`);
     };
 
     try {
-      logger.info('Stream processing started', { fileName, rows: data.length });
+      logger.info('[DEBUG] Stream processing started', { fileName, rows: data.length, redisConnected: connectionState.isConnected });
+      
+      // Check Redis connection early
+      if (!connectionState.isConnected) {
+        logger.warn('[DEBUG] Redis not connected - tasks will be created but may not be processed');
+        sendSSE({ type: 'log', level: 'warn', message: '警告: 队列服务未连接，任务创建后可能无法自动处理' });
+      }
       
       sendSSE({ type: 'log', level: 'system', message: '读取 Excel 文件...' });
       await sleep(300);
@@ -244,17 +254,28 @@ const extractController = {
 
       let trademarks;
       try {
+        logger.info('[DEBUG] Calling aiService.extractTrademarks', { rows: data.length });
+        
+        // Send periodic progress updates during AI extraction
+        const progressInterval = setInterval(() => {
+          sendSSE({ type: 'log', level: 'info', message: 'AI 正在分析数据，请稍候...' });
+        }, 8000);
+        
         trademarks = await Promise.race([
           aiService.extractTrademarks(data),
           new Promise((_, reject) => 
             setTimeout(() => reject(new Error('AI 处理超时，请稍后重试')), 60000)
           )
         ]);
+        
+        clearInterval(progressInterval);
+        logger.info('[DEBUG] AI extraction completed', { trademarkCount: trademarks?.length });
       } catch (aiError) {
-        logger.warn('AI extraction failed, using fallback', { error: aiError.message });
+        logger.warn('[DEBUG] AI extraction failed, using fallback', { error: aiError.message });
         sendSSE({ type: 'log', level: 'warn', message: `AI 处理失败: ${aiError.message}` });
         sendSSE({ type: 'log', level: 'info', message: '使用备用提取方法...' });
         trademarks = aiService.fallbackExtraction(data);
+        logger.info('[DEBUG] Fallback extraction completed', { trademarkCount: trademarks?.length });
       }
 
       if (trademarks.length === 0) {
@@ -295,8 +316,13 @@ const extractController = {
             })
           };
 
+          logger.info('[DEBUG] Creating task in database', { taskId, batchIndex: i, trademarkCount: batchTrademarks.length });
           await taskDB.create(task);
+          logger.info('[DEBUG] Task created in database', { taskId });
+          
+          logger.info('[DEBUG] Adding task to queue', { taskId, priority });
           await addTaskToQueue(taskId, task.trademarks, task.priority);
+          logger.info('[DEBUG] Task added to queue successfully', { taskId });
 
           sendSSE({ type: 'task', current: i + 1, total: totalBatches, id: taskId });
           sendSSE({ type: 'progress', percent: 50 + ((i + 1) / totalBatches * 45), message: `创建任务 ${i + 1}/${totalBatches}...` });
@@ -320,8 +346,13 @@ const extractController = {
           metadata: JSON.stringify({ sourceFile: fileName })
         };
 
+        logger.info('[DEBUG] Creating single task in database', { taskId, trademarkCount: trademarks.length });
         await taskDB.create(task);
+        logger.info('[DEBUG] Single task created in database', { taskId });
+        
+        logger.info('[DEBUG] Adding single task to queue', { taskId, priority });
         await addTaskToQueue(taskId, task.trademarks, task.priority);
+        logger.info('[DEBUG] Single task added to queue successfully', { taskId });
 
         sendSSE({ type: 'task', current: 1, total: 1, id: taskId });
         sendSSE({ type: 'progress', percent: 95, message: '任务创建成功' });
@@ -333,9 +364,10 @@ const extractController = {
         sendSSE({ type: 'complete', totalTrademarks: trademarks.length, totalTasks: 1 });
       }
 
+      logger.info('[DEBUG] Stream processing completed, ending response');
       res.end();
     } catch (error) {
-      logger.error('Stream processing failed', { error: error.message });
+      logger.error('[DEBUG] Stream processing failed', { error: error.message, stack: error.stack });
       sendSSE({ type: 'error', message: error.message });
       sendSSE({ type: 'complete', totalTrademarks: 0, totalTasks: 0, error: true });
       res.end();
