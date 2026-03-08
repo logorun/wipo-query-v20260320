@@ -66,3 +66,50 @@ table tbody tr:hover {
     height: 300px !important;
     width: 100% !important;
 }
+
+/* Export Modal Animations */
+#export-modal {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+#export-modal:not(.hidden) {
+    opacity: 1;
+    visibility: visible;
+}
+
+#export-modal.hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+#export-modal-content {
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+#export-modal:not(.hidden) #export-modal-content {
+    transform: scale(1);
+}
+
+#export-modal.hidden #export-modal-content {
+    transform: scale(0.95);
+}
+
+/* Export Modal Option Hover Effects */
+#export-modal button[class*="group"] {
+    position: relative;
+    overflow: hidden;
+}
+
+#export-modal button[class*="group"]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 50%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+#export-modal button[class*="group"]:hover::before {
+    opacity: 1;
+}

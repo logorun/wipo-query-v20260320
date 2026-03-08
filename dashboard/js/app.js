@@ -242,21 +242,36 @@ function clearSelection() {
   updateSelection();
 }
 
-async function batchExport() {
-  if (selectedTasks.size === 0) {
-    alert('请至少选择一个任务');
-    return;
+let pendingExportTaskIds = [];
+
+function openExportModal() {
+  const modal = document.getElementById('export-modal');
+  const countEl = document.getElementById('export-task-count');
+  
+  if (countEl) {
+    countEl.textContent = selectedTasks.size;
   }
   
-  const taskIds = Array.from(selectedTasks);
+  if (modal) {
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function closeExportModal() {
+  const modal = document.getElementById('export-modal');
+  if (modal) {
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
+  pendingExportTaskIds = [];
+}
+
+async function confirmBatchExport(filter) {
+  const taskIds = pendingExportTaskIds;
+  const exportAll = filter === 'all';
   
-  // 显示确认对话框，让用户选择导出模式
-  const message = '请选择批量导出模式：\n\n' +
-    '"确定" - 全部（包含未抓取的商标）\n' +
-    '"取消" - 仅有结果（只导出有查询结果的商标）';
-  
-  const exportAll = confirm(message);
-  const filter = exportAll ? 'all' : 'results-only';
+  closeExportModal();
   
   try {
     const blob = await api.batchExport(taskIds, filter);
@@ -274,9 +289,31 @@ async function batchExport() {
   }
 }
 
+async function batchExport() {
+  if (selectedTasks.size === 0) {
+    alert('请至少选择一个任务');
+    return;
+  }
+  
+  pendingExportTaskIds = Array.from(selectedTasks);
+  openExportModal();
+}
+
 document.getElementById('status-filter')?.addEventListener('change', (e) => {
     currentFilter = e.target.value;
     updateTaskList();
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        closeExportModal();
+    }
+});
+
+document.getElementById('export-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'export-modal') {
+        closeExportModal();
+    }
 });
 
 let extractedTrademarks = [];
