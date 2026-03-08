@@ -11,10 +11,6 @@ const BATCH_SIZE = 250;
 
 function sendSSE(res, data) {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
-    // Flush the response to ensure immediate delivery
-    if (typeof res.flush === 'function') {
-        res.flush();
-    }
 }
 
 function sleep(ms) {
@@ -233,53 +229,49 @@ const extractController = {
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
+    const sendSSE = (eventData) => {
+      res.write(`data: ${JSON.stringify(eventData)}\n\n`);
+    };
+
     try {
       logger.info('Stream processing started', { fileName, rows: data.length });
       
-      sendSSE(res, { type: 'log', level: 'system', message: '读取 Excel 文件...' });
+      sendSSE({ type: 'log', level: 'system', message: '读取 Excel 文件...' });
       await sleep(300);
       
-      sendSSE(res, { type: 'log', level: 'info', message: `检测到 ${data.length} 行数据` });
-      sendSSE(res, { type: 'progress', percent: 10, message: 'AI 开始提取商标...' });
-      await sleep(200);
+      sendSSE({ type: 'log', level: 'info', message: `检测到 ${data.length} 行数据` });
+      sendSSE({ type: 'progress', percent: 5, message: 'AI 开始提取商标...' });
 
-      const trademarks = await aiService.extractTrademarks(data);
+      let trademarks;
+      try {
+        trademarks = await Promise.race([
+          aiService.extractTrademarks(data),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('AI 处理超时，请稍后重试')), 60000)
+          )
+        ]);
+      } catch (aiError) {
+        logger.warn('AI extraction failed, using fallback', { error: aiError.message });
+        sendSSE({ type: 'log', level: 'warn', message: `AI 处理失败: ${aiError.message}` });
+        sendSSE({ type: 'log', level: 'info', message: '使用备用提取方法...' });
+        trademarks = aiService.fallbackExtraction(data);
+      }
 
       if (trademarks.length === 0) {
-        sendSSE(res, { type: 'error', message: '未能从文件中提取到商标' });
-        sendSSE(res, { type: 'complete', totalTrademarks: 0, totalTasks: 0 });
+        sendSSE({ type: 'error', message: '未能从文件中提取到商标' });
+        sendSSE({ type: 'complete', totalTrademarks: 0, totalTasks: 0 });
         return res.end();
       }
 
-      sendSSE(res, { type: 'log', level: 'success', message: `AI 提取完成，发现 ${trademarks.length} 个潜在商标` });
-      
-      const progressPerTrademark = 40 / trademarks.length;
-      for (let i = 0; i < trademarks.length; i++) {
-        sendSSE(res, { 
-          type: 'trademark', 
-          name: trademarks[i], 
-          count: i + 1 
-        });
-        if (i % 5 === 0) {
-          sendSSE(res, { 
-            type: 'progress', 
-            percent: 10 + (i * progressPerTrademark), 
-            message: `正在提取商标... (${i + 1}/${trademarks.length})` 
-          });
-        }
-        await sleep(50);
-      }
-
-      sendSSE(res, { type: 'log', level: 'success', message: `共提取 ${trademarks.length} 个商标` });
-      sendSSE(res, { type: 'progress', percent: 50, message: '准备创建任务...' });
+      sendSSE({ type: 'log', level: 'success', message: `AI 提取完成，发现 ${trademarks.length} 个商标` });
+      sendSSE({ type: 'progress', percent: 50, message: '准备创建任务...' });
+      await sleep(100);
 
       const shouldSplit = autoSplit && trademarks.length > BATCH_SIZE;
       
       if (shouldSplit) {
         const totalBatches = Math.ceil(trademarks.length / BATCH_SIZE);
-        sendSSE(res, { type: 'log', level: 'info', message: `自动拆分为 ${totalBatches} 个任务` });
-        
-        const progressPerBatch = 45 / totalBatches;
+        sendSSE({ type: 'log', level: 'info', message: `自动拆分为 ${totalBatches} 个任务` });
         
         for (let i = 0; i < totalBatches; i++) {
           const start = i * BATCH_SIZE;
@@ -306,28 +298,14 @@ const extractController = {
           await taskDB.create(task);
           await addTaskToQueue(taskId, task.trademarks, task.priority);
 
-          sendSSE(res, { 
-            type: 'task', 
-            current: i + 1, 
-            total: totalBatches, 
-            id: taskId 
-          });
-          
-          sendSSE(res, { 
-            type: 'progress', 
-            percent: 50 + ((i + 1) * progressPerBatch), 
-            message: `创建任务 ${i + 1}/${totalBatches}...` 
-          });
+          sendSSE({ type: 'task', current: i + 1, total: totalBatches, id: taskId });
+          sendSSE({ type: 'progress', percent: 50 + ((i + 1) / totalBatches * 45), message: `创建任务 ${i + 1}/${totalBatches}...` });
           
           logger.info('Stream created batch task', { taskId, batchIndex: i });
-          await sleep(100);
+          await sleep(50);
         }
 
-        sendSSE(res, { 
-          type: 'complete', 
-          totalTrademarks: trademarks.length, 
-          totalTasks: totalBatches 
-        });
+        sendSSE({ type: 'complete', totalTrademarks: trademarks.length, totalTasks: totalBatches });
       } else {
         const taskId = uuidv4();
         const task = {
@@ -345,25 +323,21 @@ const extractController = {
         await taskDB.create(task);
         await addTaskToQueue(taskId, task.trademarks, task.priority);
 
-        sendSSE(res, { type: 'task', current: 1, total: 1, id: taskId });
-        sendSSE(res, { type: 'progress', percent: 95, message: '任务创建成功' });
+        sendSSE({ type: 'task', current: 1, total: 1, id: taskId });
+        sendSSE({ type: 'progress', percent: 95, message: '任务创建成功' });
+        sendSSE({ type: 'log', level: 'success', message: `任务创建成功 (ID: ${taskId.slice(0, 8)}...)` });
         
         logger.info('Stream created single task', { taskId, trademarkCount: trademarks.length });
+        await sleep(100);
         
-        await sleep(200);
-        
-        sendSSE(res, { 
-          type: 'complete', 
-          totalTrademarks: trademarks.length, 
-          totalTasks: 1 
-        });
+        sendSSE({ type: 'complete', totalTrademarks: trademarks.length, totalTasks: 1 });
       }
 
       res.end();
     } catch (error) {
       logger.error('Stream processing failed', { error: error.message });
-      sendSSE(res, { type: 'error', message: error.message });
-      sendSSE(res, { type: 'complete', totalTrademarks: 0, totalTasks: 0, error: true });
+      sendSSE({ type: 'error', message: error.message });
+      sendSSE({ type: 'complete', totalTrademarks: 0, totalTasks: 0, error: true });
       res.end();
     }
   }
