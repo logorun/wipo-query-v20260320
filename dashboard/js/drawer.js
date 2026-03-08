@@ -335,19 +335,15 @@ class TaskDrawer {
     }
     
     if (result.records && result.records.length > 0) {
-      const recordPreview = result.records.slice(0, 3).map((record, i) => 
+      const recordPreview = result.records.map((record, i) => 
         `<div class="mt-2 p-2 bg-slate-700/50 rounded text-xs">
           <p class="text-slate-400">记录 #${i + 1}</p>
-          ${Object.entries(record).slice(0, 4).map(([key, value]) => 
-            `<p class="text-slate-300"><span class="text-slate-500">${key}:</span> ${typeof value === 'object' ? JSON.stringify(value).slice(0, 50) : String(value).slice(0, 50)}</p>`
+          ${Object.entries(record).map(([key, value]) => 
+            `<p class="text-slate-300"><span class="text-slate-500">${key}:</span> ${typeof value === 'object' ? JSON.stringify(value) : String(value)}</p>`
           ).join('')}
         </div>`
       ).join('');
       parts.push(recordPreview);
-      
-      if (result.records.length > 3) {
-        parts.push(`<p class="text-slate-500 text-xs mt-2">还有 ${result.records.length - 3} 条记录未显示...</p>`);
-      }
     }
     
     return parts.length > 0 ? parts.join('') : '<p class="text-slate-500 text-sm">无详细信息</p>';
