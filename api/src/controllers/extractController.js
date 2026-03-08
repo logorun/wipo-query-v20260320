@@ -11,6 +11,10 @@ const BATCH_SIZE = 250;
 
 function sendSSE(res, data) {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
+    // Flush the response to ensure immediate delivery
+    if (typeof res.flush === 'function') {
+        res.flush();
+    }
 }
 
 function sleep(ms) {
