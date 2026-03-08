@@ -497,11 +497,32 @@ const doQueryTrademark = async (trademark, shouldSaveEvidence) => {
   execAgent('click "e10"', 30000);
   await sleep(15000);
 
-  // 6. 获取结果快照
-  logger.debug('Step 6: Getting results snapshot...', { trademark });
+  // 6. 获取初始快照，检测总结果数
+  logger.debug('Step 6: Getting initial snapshot...', { trademark });
   snapshot = execAgent('snapshot', 30000);
+  
+  // 7. 滚动加载所有结果
+  const resultMatch = snapshot.match(/Displaying\s*\d+-\d+\s*of\s*(\d+)/i);
+  const totalResults = resultMatch ? parseInt(resultMatch[1]) : 0;
+  
+  if (totalResults > 3) {
+    logger.info('Scrolling to load all results', { trademark, totalResults });
+    
+    // 计算需要滚动的次数（假设每页显示约10条）
+    const scrollCount = Math.min(Math.ceil(totalResults / 10), 10);
+    
+    for (let i = 0; i < scrollCount; i++) {
+      logger.debug('Scrolling...', { trademark, scroll: i + 1, total: scrollCount });
+      execAgent('scroll down', 5000);
+      await sleep(2000);
+    }
+    
+    // 滚动完成后重新获取快照
+    logger.debug('Getting final snapshot after scrolling...', { trademark });
+    snapshot = execAgent('snapshot', 30000);
+  }
 
-  // 7. 保存证据截图
+  // 8. 保存证据截图
   let evidencePath = null;
   if (shouldSaveEvidence) {
     evidencePath = await saveEvidence(trademark, snapshot);

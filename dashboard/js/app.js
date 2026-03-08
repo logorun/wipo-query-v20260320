@@ -1,10 +1,26 @@
 let allTasks = [];
 let currentFilter = 'all';
+let refreshInterval = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     initDashboard();
-    setInterval(refreshData, 30000);
+    startSmartPolling();
 });
+
+function startSmartPolling() {
+    if (refreshInterval) {
+        clearInterval(refreshInterval);
+    }
+    refreshInterval = setInterval(smartRefresh, 5000);
+}
+
+async function smartRefresh() {
+    const hasActiveTasks = allTasks.some(t => t.status === 'processing' || t.status === 'pending');
+    
+    if (hasActiveTasks) {
+        await refreshData();
+    }
+}
 
 async function initDashboard() {
     const isHealthy = await api.health();
