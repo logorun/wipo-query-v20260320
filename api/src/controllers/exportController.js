@@ -331,26 +331,50 @@ const exportBatch = async (req, res) => {
         for (const trademark of trademarks) {
           const result = resultsMap.get(trademark);
           
-          if (result && result.records && result.records.length > 0) {
-            for (const record of result.records || []) {
+          // 检查是否有查询结果
+          if (result) {
+            // 已经查询过了
+            if (result.records && result.records.length > 0) {
+              // 有记录，显示详细数据
+              for (const record of result.records || []) {
+                allRecords.push({
+                  '查询商标': trademark,
+                  '品牌名称': record.brandName || '',
+                  '持有人': record.owner || '',
+                  '状态': record.status || '',
+                  '国家/地区': record.country || '',
+                  '国家代码': record.countryCode || '',
+                  '注册号': record.regNumber || '',
+                  '注册日期': record.regDate || '',
+                  '尼斯分类': (record.niceClasses || []).join(', '),
+                  '是否欧盟': record.isEU ? '是' : '否',
+                  '是否国际注册': record.isInternational ? '是' : '否',
+                  '是否展开记录': record.isExpanded ? '是' : '否',
+                  '任务ID': taskId,
+                  '查询时间': result.queryTime
+                });
+              }
+            } else {
+              // 已经查询但没有找到记录
               allRecords.push({
                 '查询商标': trademark,
-                '品牌名称': record.brandName || '',
-                '持有人': record.owner || '',
-                '状态': record.status || '',
-                '国家/地区': record.country || '',
-                '国家代码': record.countryCode || '',
-                '注册号': record.regNumber || '',
-                '注册日期': record.regDate || '',
-                '尼斯分类': (record.niceClasses || []).join(', '),
-                '是否欧盟': record.isEU ? '是' : '否',
-                '是否国际注册': record.isInternational ? '是' : '否',
-                '是否展开记录': record.isExpanded ? '是' : '否',
+                '品牌名称': '-',
+                '持有人': '-',
+                '状态': result.queryStatus === 'not_found' ? '未找到' : (result.queryStatus || '-'),
+                '国家/地区': '-',
+                '国家代码': '-',
+                '注册号': '-',
+                '注册日期': '-',
+                '尼斯分类': '-',
+                '是否欧盟': '-',
+                '是否国际注册': '-',
+                '是否展开记录': '-',
                 '任务ID': taskId,
-                '查询时间': result.queryTime
+                '查询时间': result.queryTime || '-'
               });
             }
           } else {
+            // 尚未查询
             allRecords.push({
               '查询商标': trademark,
               '品牌名称': '暂未抓取',

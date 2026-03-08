@@ -2,7 +2,7 @@ const xlsx = require('xlsx');
 const { v4: uuidv4 } = require('uuid');
 const aiService = require('../services/aiService');
 const { taskDB } = require('../models/database');
-const { addTaskToQueue, connectionState } = require('../services/queueService');
+const { addTaskToQueue, connectionState, isRedisConnected } = require('../services/queueService');
 const { Logger } = require('../utils/logger');
 const { asyncHandler } = require('../middleware/errorHandler');
 
@@ -217,7 +217,8 @@ const extractController = {
     const { data, fileName, options = {} } = req.body;
     const { autoSplit = true, priority = 5 } = options;
 
-    logger.info('[DEBUG] extractStream called', { fileName, dataLength: data?.length, options, redisConnected: connectionState.isConnected });
+    const redisConnected = await isRedisConnected();
+    logger.info('[DEBUG] extractStream called', { fileName, dataLength: data?.length, options, redisConnected });
 
     if (!data || !Array.isArray(data) || data.length === 0) {
       logger.error('[DEBUG] Invalid data received', { data: typeof data, isArray: Array.isArray(data) });
@@ -238,10 +239,10 @@ const extractController = {
     };
 
     try {
-      logger.info('[DEBUG] Stream processing started', { fileName, rows: data.length, redisConnected: connectionState.isConnected });
+      const currentRedisState = await isRedisConnected();
+      logger.info('[DEBUG] Stream processing started', { fileName, rows: data.length, redisConnected: currentRedisState });
       
-      // Check Redis connection early
-      if (!connectionState.isConnected) {
+      if (!currentRedisState) {
         logger.warn('[DEBUG] Redis not connected - tasks will be created but may not be processed');
         sendSSE({ type: 'log', level: 'warn', message: '警告: 队列服务未连接，任务创建后可能无法自动处理' });
       }
@@ -251,32 +252,12 @@ const extractController = {
       
       sendSSE({ type: 'log', level: 'info', message: `检测到 ${data.length} 行数据` });
       sendSSE({ type: 'progress', percent: 5, message: 'AI 开始提取商标...' });
-
+      // 直接使用备用提取方法，跳过AI处理
+      sendSSE({ type: 'log', level: 'info', message: '正在提取商标...' });
+      
       let trademarks;
-      try {
-        logger.info('[DEBUG] Calling aiService.extractTrademarks', { rows: data.length });
-        
-        // Send periodic progress updates during AI extraction
-        const progressInterval = setInterval(() => {
-          sendSSE({ type: 'log', level: 'info', message: 'AI 正在分析数据，请稍候...' });
-        }, 8000);
-        
-        trademarks = await Promise.race([
-          aiService.extractTrademarks(data),
-          new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('AI 处理超时，请稍后重试')), 60000)
-          )
-        ]);
-        
-        clearInterval(progressInterval);
-        logger.info('[DEBUG] AI extraction completed', { trademarkCount: trademarks?.length });
-      } catch (aiError) {
-        logger.warn('[DEBUG] AI extraction failed, using fallback', { error: aiError.message });
-        sendSSE({ type: 'log', level: 'warn', message: `AI 处理失败: ${aiError.message}` });
-        sendSSE({ type: 'log', level: 'info', message: '使用备用提取方法...' });
-        trademarks = aiService.fallbackExtraction(data);
-        logger.info('[DEBUG] Fallback extraction completed', { trademarkCount: trademarks?.length });
-      }
+      trademarks = aiService.fallbackExtraction(data);
+      logger.info('[DEBUG] Extraction completed', { trademarkCount: trademarks?.length });
 
       if (trademarks.length === 0) {
         sendSSE({ type: 'error', message: '未能从文件中提取到商标' });
@@ -303,7 +284,7 @@ const extractController = {
           const task = {
             id: taskId,
             trademarks: batchTrademarks.map(t => t.trim().toUpperCase()),
-            status: 'pending',
+            status: 'paused',
             priority: priority,
             callbackUrl: null,
             userId: req.user?.id || null,
@@ -320,9 +301,8 @@ const extractController = {
           await taskDB.create(task);
           logger.info('[DEBUG] Task created in database', { taskId });
           
-          logger.info('[DEBUG] Adding task to queue', { taskId, priority });
-          await addTaskToQueue(taskId, task.trademarks, task.priority);
-          logger.info('[DEBUG] Task added to queue successfully', { taskId });
+          // Task created as paused, will be added to queue when user clicks start
+          logger.info('[DEBUG] Task created as paused (waiting for user to start)', { taskId });
 
           sendSSE({ type: 'task', current: i + 1, total: totalBatches, id: taskId });
           sendSSE({ type: 'progress', percent: 50 + ((i + 1) / totalBatches * 45), message: `创建任务 ${i + 1}/${totalBatches}...` });
@@ -335,10 +315,10 @@ const extractController = {
       } else {
         const taskId = uuidv4();
         const task = {
-          id: taskId,
-          trademarks: trademarks.map(t => t.trim().toUpperCase()),
-          status: 'pending',
-          priority: priority,
+            id: taskId,
+            trademarks: trademarks.map(t => t.trim().toUpperCase()),
+            status: 'paused',
+            priority: priority,
           callbackUrl: null,
           userId: req.user?.id || null,
           orgId: req.user?.orgId || null,
@@ -350,9 +330,8 @@ const extractController = {
         await taskDB.create(task);
         logger.info('[DEBUG] Single task created in database', { taskId });
         
-        logger.info('[DEBUG] Adding single task to queue', { taskId, priority });
-        await addTaskToQueue(taskId, task.trademarks, task.priority);
-        logger.info('[DEBUG] Single task added to queue successfully', { taskId });
+        // Task created as paused, will be added to queue when user clicks start
+        logger.info('[DEBUG] Single task created as paused (waiting for user to start)', { taskId });
 
         sendSSE({ type: 'task', current: 1, total: 1, id: taskId });
         sendSSE({ type: 'progress', percent: 95, message: '任务创建成功' });

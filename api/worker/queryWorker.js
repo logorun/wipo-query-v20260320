@@ -578,9 +578,9 @@ const doQueryTrademark = async (trademark, shouldSaveEvidence) => {
 };
 
 /**
- * 处理队列任务 - 支持并发处理 3 个任务
+ * 处理队列任务 - 单线程处理
  */
-queryQueue.process(3, async (job) => {
+queryQueue.process(1, async (job) => {
   const { taskId, trademarks } = job.data;
   const jobLogger = logger.child(`job-${job.id}`);
   

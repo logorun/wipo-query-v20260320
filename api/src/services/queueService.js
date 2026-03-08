@@ -149,23 +149,37 @@ const initQueue = () => {
 // 初始化队列
 queryQueue = initQueue();
 
-/**
- * 健康检查
- */
+const isRedisConnected = async () => {
+  try {
+    const client = queryQueue.client;
+    if (client && client.status === 'ready') {
+      await client.ping();
+      connectionState.isConnected = true;
+      connectionState.lastError = null;
+      return true;
+    }
+    await queryQueue.getJobCounts();
+    connectionState.isConnected = true;
+    connectionState.lastError = null;
+    return true;
+  } catch (error) {
+    connectionState.isConnected = false;
+    connectionState.lastError = error.message;
+    return false;
+  }
+};
+
 const healthCheck = async () => {
   try {
     const client = queryQueue.client;
     await client.ping();
-    return {
-      healthy: true,
-      state: connectionState
-    };
+    connectionState.isConnected = true;
+    connectionState.lastError = null;
+    return { healthy: true, state: connectionState };
   } catch (error) {
-    return {
-      healthy: false,
-      error: error.message,
-      state: connectionState
-    };
+    connectionState.isConnected = false;
+    connectionState.lastError = error.message;
+    return { healthy: false, error: error.message, state: connectionState };
   }
 };
 
@@ -368,5 +382,6 @@ module.exports = {
   gracefulShutdown,
   healthCheck,
   waitForConnection,
-  connectionState
+  connectionState,
+  isRedisConnected
 };
