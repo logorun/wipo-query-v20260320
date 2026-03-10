@@ -77,6 +77,135 @@ ${dataSample}
     }
   }
 
+  async extractTrademarksStream(excelData, onChunk) {
+    if (!this.apiKey) {
+      logger.warn('No AI API key configured, using fallback extraction');
+      onChunk('[使用备用提取方法...]\n');
+      return this.fallbackExtraction(excelData);
+    }
+
+    const dataSample = this.formatDataForAI(excelData);
+    
+    const prompt = `从以下数据中提取所有商标名称，以JSON格式返回。
+
+数据：
+${dataSample}
+
+要求：
+1. 返回JSON格式：{"trademarks": ["商标1", "商标2", ...]}
+2. 只返回JSON，不要其他文字
+3. 去除重复项
+4. 中文商标保留中文，英文商标保留英文`;
+
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/chat/completions`,
+        {
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: '你是商标提取助手。必须只返回JSON格式的结果，不要有任何解释。'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          temperature: 0.1,
+          max_tokens: 16000,
+          stream: true
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 120000,
+          responseType: 'stream'
+        }
+      );
+
+      return new Promise((resolve, reject) => {
+        let fullContent = '';
+        let buffer = '';
+
+        response.data.on('data', (chunk) => {
+          buffer += chunk.toString();
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            const trimmedLine = line.trim();
+            if (trimmedLine.startsWith('data:')) {
+              const data = trimmedLine.slice(5).trim();
+              if (data === '[DONE]') continue;
+              
+              try {
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
+                
+                const reasoning = delta?.reasoning_content || '';
+                const content = delta?.content || '';
+                
+                if (reasoning) {
+                  onChunk(reasoning);
+                }
+                if (content) {
+                  fullContent += content;
+                }
+              } catch (e) {
+                // Skip invalid JSON
+              }
+            }
+          }
+        });
+
+        response.data.on('end', () => {
+          const trademarks = this.parseJsonResponse(fullContent);
+          logger.info('AI stream extraction completed', { 
+            inputRows: excelData.length,
+            extractedCount: trademarks.length 
+          });
+          resolve(trademarks);
+        });
+
+        response.data.on('error', (err) => {
+          logger.error('AI stream error', { error: err.message });
+          onChunk(`\n[AI 错误: ${err.message}]\n`);
+          resolve(this.fallbackExtraction(excelData));
+        });
+      });
+    } catch (error) {
+      logger.error('AI stream extraction failed', { 
+        error: error.message,
+        response: error.response?.data 
+      });
+      onChunk(`\n[AI 调用失败: ${error.message}]\n`);
+      return this.fallbackExtraction(excelData);
+    }
+  }
+
+  parseJsonResponse(content) {
+    if (!content) return [];
+    
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*"trademarks"[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed.trademarks)) {
+          return parsed.trademarks
+            .map(t => String(t).trim())
+            .filter(t => t.length > 0 && t.length <= 100);
+        }
+      }
+    } catch (e) {
+      logger.warn('Failed to parse JSON response, using text parsing', { error: e.message });
+    }
+    
+    return this.parseAIResponse(content);
+  }
+
   formatDataForAI(excelData) {
     return excelData.map(row => {
       if (typeof row === 'object') {

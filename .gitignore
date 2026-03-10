@@ -3,8 +3,8 @@ logs/
 *.log
 
 # Output files (generated reports)
-output/reports/
-output/evidence/
+output/
+api/output/
 
 # Node modules
 node_modules/
@@ -12,9 +12,21 @@ node_modules/
 # Database files
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
+api/data/
+
+# Backup files
+backup/
+
+# Test files
+test-*.js
+test-*.xlsx
+*-test-*.xlsx
 
 # Environment
 .env
+api/.env
 
 # OS files
 .DS_Store
@@ -25,3 +37,7 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# Temporary files
+*.tmp
+*.temp

@@ -388,6 +388,9 @@ const taskController = {
     }
 
     await taskDB.updateStatus(taskId, 'pending');
+    
+    // Add task to queue so worker can start processing
+    await addTaskToQueue(taskId, task.trademarks, task.priority);
 
     res.json({
       success: true,

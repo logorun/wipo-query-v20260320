@@ -102,7 +102,7 @@ function updateTaskList() {
     row.className = 'border-b border-slate-800 cursor-pointer hover:bg-slate-800/50 transition';
     
     const statusClass = `status-${task.status}`;
-    const statusText = { completed: '已完成', processing: '处理中', pending: '待处理', failed: '失败', paused: '已暂停' }[task.status] || task.status;
+    const statusText = { completed: '已完成', processing: '处理中', pending: '待处理', failed: '失败', paused: '等待开始' }[task.status] || task.status;
     
     // Calculate progress
     const progress = task.progress || {};
@@ -575,6 +575,15 @@ function handleStreamEvent(event) {
         case 'error':
             appendToConsole('error', event.message);
             break;
+        case 'ai_start':
+            appendToConsole('ai', event.message || 'AI 开始分析...');
+            break;
+        case 'ai_output':
+            appendAIOutput(event.content);
+            break;
+        case 'ai_end':
+            appendToConsole('ai', '---');
+            break;
     }
 }
 
@@ -586,13 +595,6 @@ function updateProgress(percent, message) {
     bar.style.width = percent + '%';
     text.textContent = Math.round(percent) + '%';
     status.innerHTML = `<span class="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>${message}`;
-}
-
-function resetConsole() {
-    const output = document.getElementById('console-output');
-    output.innerHTML = '<div class="text-slate-500 italic">Waiting for process to start...</div>';
-    document.getElementById('stat-extracted').textContent = '0';
-    document.getElementById('stat-tasks').textContent = '0';
 }
 
 function appendToConsole(level, message) {
@@ -611,11 +613,43 @@ function appendToConsole(level, message) {
     if (level === 'error') prefix = '✗';
     if (level === 'warn') prefix = '!';
     if (level === 'system') prefix = '►';
+    if (level === 'ai') prefix = '🤖';
     
     line.innerHTML = `<span class="console-timestamp">[${time}]</span> <span class="console-prefix">${prefix}</span> ${escapeHtml(message)}`;
     
     output.appendChild(line);
     output.scrollTop = output.scrollHeight;
+}
+
+let aiOutputLine = null;
+
+function appendAIOutput(content) {
+    const output = document.getElementById('console-output');
+    const emptyMsg = output.querySelector('.italic');
+    if (emptyMsg) emptyMsg.remove();
+    
+    if (!aiOutputLine) {
+        aiOutputLine = document.createElement('div');
+        aiOutputLine.className = 'console-line console-ai-stream';
+        
+        const now = new Date();
+        const time = now.toLocaleTimeString('zh-CN', { hour12: false });
+        
+        aiOutputLine.innerHTML = `<span class="console-timestamp">[${time}]</span> <span class="console-prefix">🤖</span> <span class="ai-content"></span>`;
+        output.appendChild(aiOutputLine);
+    }
+    
+    const contentSpan = aiOutputLine.querySelector('.ai-content');
+    contentSpan.textContent += content;
+    output.scrollTop = output.scrollHeight;
+}
+
+function resetConsole() {
+    const output = document.getElementById('console-output');
+    output.innerHTML = '<div class="text-slate-500 italic">Waiting for process to start...</div>';
+    document.getElementById('stat-extracted').textContent = '0';
+    document.getElementById('stat-tasks').textContent = '0';
+    aiOutputLine = null;
 }
 
 function escapeHtml(text) {
