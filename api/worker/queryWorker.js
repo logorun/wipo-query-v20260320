@@ -9,8 +9,29 @@ const { QueryExecutionError, ErrorTypes } = require('../src/utils/errors');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { ProxyManager } = require('../../src/utils/proxy-manager');
 
 const logger = new Logger('worker');
+
+// ==================== 代理管理器初始化 ====================
+const proxyConfig = {
+  enabled: process.env.PROXY_ENABLED !== 'false', // 默认启用
+  proxyHost: process.env.PROXY_HOST || '23.148.244.2',
+  portStart: parseInt(process.env.PROXY_PORT_START) || 10000,
+  portEnd: parseInt(process.env.PROXY_PORT_END) || 10252,
+  protocol: process.env.PROXY_PROTOCOL || 'socks5',
+  strategy: process.env.PROXY_STRATEGY || 'round-robin',
+  cooldownMs: parseInt(process.env.PROXY_COOLDOWN_MS) || 30000,
+  stateFile: path.join(__dirname, '../../output/proxy-state.json')
+};
+
+const proxyManager = new ProxyManager(proxyConfig);
+
+logger.info('Proxy manager initialized', {
+  enabled: proxyConfig.enabled,
+  totalProxies: proxyManager.totalProxies,
+  strategy: proxyConfig.strategy
+});
 
 // 工具函数
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -32,9 +53,12 @@ const calculateBackoff = (attempt, baseDelay = 5000, maxDelay = 60000) => {
 };
 
 /**
- * 容错执行 agent-browser 命令（带熔断器保护）
+ * 容错执行 agent-browser 命令（带熔断器保护和代理支持）
+ * @param {string} cmd - agent-browser命令
+ * @param {number} timeout - 超时时间（毫秒）
+ * @param {object} proxyInfo - 代理信息（可选）
  */
-const execAgent = (cmd, timeout = 30000) => {
+const execAgent = (cmd, timeout = 30000, proxyInfo = null) => {
   const breaker = circuitBreakers.get('agent-browser', {
     failureThreshold: 5,
     successThreshold: 2,
@@ -43,7 +67,23 @@ const execAgent = (cmd, timeout = 30000) => {
 
   return breaker.executeSync(() => {
     try {
-      return execSync(`agent-browser ${cmd}`, { encoding: 'utf-8', timeout });
+      // 构建环境变量
+      const env = { ...process.env };
+      
+      // 如果提供了代理信息，设置代理环境变量
+      if (proxyInfo && proxyConfig.enabled) {
+        env.AGENT_BROWSER_PROXY = proxyInfo.url;
+        logger.debug('Using proxy for request', { 
+          proxy: proxyInfo.url, 
+          ip: proxyInfo.ip 
+        });
+      }
+      
+      return execSync(`agent-browser ${cmd}`, { 
+        encoding: 'utf-8', 
+        timeout,
+        env 
+      });
     } catch (e) {
       // 区分可重试和不可重试错误
       const isRetryable = !e.message?.includes('ENOENT') && 
@@ -62,6 +102,39 @@ const execAgent = (cmd, timeout = 30000) => {
       return e.stdout || e.message || '';
     }
   });
+};
+
+/**
+ * 获取下一个代理（如果启用）
+ * @returns {object|null} 代理信息
+ */
+const getNextProxy = () => {
+  if (!proxyConfig.enabled) {
+    return null;
+  }
+  
+  const env = proxyManager.getProxyEnv();
+  return env.proxyInfo;
+};
+
+/**
+ * 标记代理请求成功
+ * @param {object} proxyInfo - 代理信息
+ */
+const markProxySuccess = (proxyInfo) => {
+  if (proxyInfo && proxyConfig.enabled) {
+    proxyManager.markSuccess(proxyInfo.index);
+  }
+};
+
+/**
+ * 标记代理请求失败
+ * @param {object} proxyInfo - 代理信息
+ */
+const markProxyFailed = (proxyInfo) => {
+  if (proxyInfo && proxyConfig.enabled) {
+    proxyManager.markFailed(proxyInfo.index);
+  }
 };
 
 /**
@@ -166,9 +239,35 @@ const EUROPE_COUNTRY_CODES = Object.values(EU_COUNTRIES_MAP)
 /**
  * 解析快照提取商标记录
  */
+/**
+ * 精确匹配检查 - 宽松模式
+ * 允许一定程度的差异（空格、特殊字符、小差异）
+ */
+const isExactMatch = (resultName, searchTerm) => {
+  if (!resultName || !searchTerm) return false;
+
+  const normalizedResult = resultName.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const normalizedSearch = searchTerm.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+  // 完全匹配
+  if (normalizedResult === normalizedSearch) return true;
+
+  // 宽松匹配：结果以搜索词开头或结尾，且长度相近
+  if (normalizedResult.startsWith(normalizedSearch) ||
+      normalizedResult.endsWith(normalizedSearch)) {
+    const lengthDiff = Math.abs(normalizedResult.length - normalizedSearch.length);
+    if (lengthDiff <= 3) return true; // 允许最多3个字符的差异
+  }
+
+  // 搜索词包含在结果中
+  if (normalizedResult.includes(normalizedSearch)) return true;
+
+  return false;
+};
+
 const parseSnapshot = (snapshot, trademark) => {
   const records = [];
-  
+
   if (!snapshot || typeof snapshot !== 'string') {
     logger.warn('Empty or invalid snapshot', { trademark });
     return records;
@@ -190,12 +289,13 @@ const parseSnapshot = (snapshot, trademark) => {
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
-    
+
     const brandMatch = line.match(/text:\s*([^,]+?)\s*Owner/i);
     if (brandMatch) {
       const brandName = brandMatch[1].trim();
-      
-      if (brandName.toUpperCase() === trademark.toUpperCase()) {
+
+      // 使用宽松匹配而不是严格匹配
+      if (isExactMatch(brandName, trademark)) {
         const record = extractRecord(lines, i, trademark);
         if (record && record.status === 'Registered') {
           records.push(record);
@@ -461,120 +561,151 @@ const queryTrademark = async (trademark, options = {}) => {
 };
 
 /**
- * 实际查询执行
+ * 实际查询执行（带代理支持）
  */
 const doQueryTrademark = async (trademark, shouldSaveEvidence) => {
   const startTime = Date.now();
-
-  // 1. 打开页面
-  logger.debug('Step 1: Opening page...', { trademark });
-  execAgent('open "https://branddb.wipo.int/en/advancedsearch" --json', 60000);
-  await sleep(10000);
-
-  // 2. 获取页面状态
-  logger.debug('Step 2: Getting page state...', { trademark });
-  let snapshot = execAgent('snapshot', 15000);
-
-  // 3. 选择精确匹配策略
-  logger.debug('Step 3: Setting search strategy...', { trademark });
-  execAgent('select "e39" "is matching exact expression"', 30000);
   
-  snapshot = execAgent('snapshot', 10000);
-  if (snapshot.includes('is matching exact expression')) {
-    logger.debug('Strategy set to exact expression', { trademark });
-  } else {
-    logger.warn('Strategy may not have changed, continuing anyway', { trademark });
+  // 获取代理（每次查询使用新代理）
+  const proxyInfo = getNextProxy();
+  if (proxyInfo) {
+    logger.info('Using proxy for query', { 
+      trademark, 
+      proxy: proxyInfo.url, 
+      ip: proxyInfo.ip 
+    });
   }
-  await sleep(2000);
 
-  // 4. 输入商标名称
-  logger.debug('Step 4: Entering trademark...', { trademark });
-  execAgent(`fill "e45" "${trademark}"`, 30000);
-  await sleep(1000);
+  try {
+    // 1. 打开页面
+    logger.debug('Step 1: Opening page...', { trademark });
+    execAgent('open "https://branddb.wipo.int/en/advancedsearch" --json', 60000, proxyInfo);
+    await sleep(10000);
 
-  // 5. 点击搜索
-  logger.debug('Step 5: Clicking search...', { trademark });
-  execAgent('click "e10"', 30000);
-  await sleep(15000);
+    // 2. 获取页面状态
+    logger.debug('Step 2: Getting page state...', { trademark });
+    let snapshot = execAgent('snapshot', 15000, proxyInfo);
 
-  // 6. 获取初始快照，检测总结果数
-  logger.debug('Step 6: Getting initial snapshot...', { trademark });
-  snapshot = execAgent('snapshot', 30000);
-  
-  // 7. 滚动加载所有结果
-  const resultMatch = snapshot.match(/Displaying\s*\d+-\d+\s*of\s*(\d+)/i);
-  const totalResults = resultMatch ? parseInt(resultMatch[1]) : 0;
-  
-  if (totalResults > 3) {
-    logger.info('Scrolling to load all results', { trademark, totalResults });
+    // 3. 选择精确匹配策略
+    logger.debug('Step 3: Setting search strategy...', { trademark });
+    execAgent('select "e39" "is matching exact expression"', 30000, proxyInfo);
     
-    // 计算需要滚动的次数（假设每页显示约10条）
-    const scrollCount = Math.min(Math.ceil(totalResults / 10), 10);
+    snapshot = execAgent('snapshot', 10000, proxyInfo);
+    if (snapshot.includes('is matching exact expression')) {
+      logger.debug('Strategy set to exact expression', { trademark });
+    } else {
+      logger.warn('Strategy may not have changed, continuing anyway', { trademark });
+    }
+    await sleep(2000);
+
+    // 4. 输入商标名称
+    logger.debug('Step 4: Entering trademark...', { trademark });
+    execAgent(`fill "e45" "${trademark}"`, 30000, proxyInfo);
+    await sleep(1000);
+
+    // 5. 点击搜索
+    logger.debug('Step 5: Clicking search...', { trademark });
+    execAgent('click "e10"', 30000, proxyInfo);
+    await sleep(15000);
+
+    // 6. 获取初始快照，检测总结果数
+    logger.debug('Step 6: Getting initial snapshot...', { trademark });
+    snapshot = execAgent('snapshot', 30000, proxyInfo);
+  
+    // 7. 滚动加载所有结果
+    const resultMatch = snapshot.match(/Displaying\s*\d+-\d+\s*of\s*(\d+)/i);
+    const totalResults = resultMatch ? parseInt(resultMatch[1]) : 0;
+  
+    if (totalResults > 3) {
+      logger.info('Scrolling to load all results', { trademark, totalResults });
     
-    for (let i = 0; i < scrollCount; i++) {
-      logger.debug('Scrolling...', { trademark, scroll: i + 1, total: scrollCount });
-      execAgent('scroll down', 5000);
-      await sleep(2000);
+      // 计算需要滚动的次数（假设每页显示约10条）
+      const scrollCount = Math.min(Math.ceil(totalResults / 10), 10);
+    
+      for (let i = 0; i < scrollCount; i++) {
+        logger.debug('Scrolling...', { trademark, scroll: i + 1, total: scrollCount });
+        execAgent('scroll down', 5000, proxyInfo);
+        await sleep(2000);
+      }
+    
+      // 滚动完成后重新获取快照
+      logger.debug('Getting final snapshot after scrolling...', { trademark });
+      snapshot = execAgent('snapshot', 30000, proxyInfo);
+    }
+
+    // 8. 保存证据截图
+    let evidencePath = null;
+    if (shouldSaveEvidence) {
+      evidencePath = await saveEvidence(trademark, snapshot);
+    }
+
+    // 9. 关闭浏览器
+    execAgent('close', 10000, proxyInfo);
+
+    // 10. 标记代理成功
+    markProxySuccess(proxyInfo);
+
+    // 11. 解析结果
+    let records = parseSnapshot(snapshot, trademark);
+    logger.info('Parsed records from snapshot', { trademark, count: records.length });
+  
+    // 12. 展开国际注册
+    const expandedRecords = [];
+    for (const record of records) {
+      const expanded = expandInternationalRegistration(record);
+      expandedRecords.push(...expanded);
+    }
+  
+    const euRecords = expandedRecords.filter(r => r.isEU);
+    const nonEURecords = expandedRecords.filter(r => !r.isEU);
+  
+    logger.info('Query result summary', {
+      trademark,
+      totalRecords: expandedRecords.length,
+      euRecords: euRecords.length,
+      nonEURecords: nonEURecords.length,
+      euCountries: euRecords.map(r => r.countryCode || r.country),
+      proxyUsed: proxyInfo ? proxyInfo.ip : 'none'
+    });
+
+    const result = {
+      trademark,
+      queryStatus: expandedRecords.length > 0 ? 'found' : 'not_found',
+      totalRecords: expandedRecords.length,
+      euRecords: euRecords.length,
+      nonEURecords: nonEURecords.length,
+      records: expandedRecords,
+      queryTime: new Date().toISOString(),
+      fromCache: false,
+      queryDuration: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+      evidencePath,
+      isInternational: expandedRecords.some(r => r.isInternational),
+      proxyIp: proxyInfo ? proxyInfo.ip : null
+    };
+
+    logger.info(`Query completed`, { 
+      trademark, 
+      totalRecords: result.totalRecords,
+      euRecords: result.euRecords,
+      duration: result.queryDuration,
+      proxyIp: result.proxyIp
+    });
+
+    return result;
+    
+  } catch (error) {
+    // 标记代理失败
+    markProxyFailed(proxyInfo);
+    
+    // 关闭浏览器
+    try {
+      execAgent('close', 5000, proxyInfo);
+    } catch (e) {
+      // 忽略关闭错误
     }
     
-    // 滚动完成后重新获取快照
-    logger.debug('Getting final snapshot after scrolling...', { trademark });
-    snapshot = execAgent('snapshot', 30000);
+    throw error;
   }
-
-  // 8. 保存证据截图
-  let evidencePath = null;
-  if (shouldSaveEvidence) {
-    evidencePath = await saveEvidence(trademark, snapshot);
-  }
-
-  // 8. 关闭浏览器
-  execAgent('close', 10000);
-
-  // 9. 解析结果
-  let records = parseSnapshot(snapshot, trademark);
-  logger.info('Parsed records from snapshot', { trademark, count: records.length });
-  
-  // 10. 展开国际注册
-  const expandedRecords = [];
-  for (const record of records) {
-    const expanded = expandInternationalRegistration(record);
-    expandedRecords.push(...expanded);
-  }
-  
-  const euRecords = expandedRecords.filter(r => r.isEU);
-  const nonEURecords = expandedRecords.filter(r => !r.isEU);
-  
-  logger.info('Query result summary', {
-    trademark,
-    totalRecords: expandedRecords.length,
-    euRecords: euRecords.length,
-    nonEURecords: nonEURecords.length,
-    euCountries: euRecords.map(r => r.countryCode || r.country)
-  });
-
-  const result = {
-    trademark,
-    queryStatus: expandedRecords.length > 0 ? 'found' : 'not_found',
-    totalRecords: expandedRecords.length,
-    euRecords: euRecords.length,
-    nonEURecords: nonEURecords.length,
-    records: expandedRecords,
-    queryTime: new Date().toISOString(),
-    fromCache: false,
-    queryDuration: `${((Date.now() - startTime) / 1000).toFixed(1)}s`,
-    evidencePath,
-    isInternational: expandedRecords.some(r => r.isInternational)
-  };
-
-  logger.info(`Query completed`, { 
-    trademark, 
-    totalRecords: result.totalRecords,
-    euRecords: result.euRecords,
-    duration: result.queryDuration
-  });
-
-  return result;
 };
 
 /**
@@ -732,7 +863,12 @@ queryQueue.on('stalled', (job) => {
 logger.info('🚀 Worker started with enhanced robustness', {
   circuitBreaker: true,
   retryLogic: true,
-  validation: true
+  validation: true,
+  proxy: {
+    enabled: proxyConfig.enabled,
+    totalProxies: proxyManager.totalProxies,
+    strategy: proxyConfig.strategy
+  }
 });
 
 // Startup health check

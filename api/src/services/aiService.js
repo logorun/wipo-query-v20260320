@@ -233,7 +233,47 @@ ${dataSample}
 
   fallbackExtraction(excelData) {
     logger.info('Using fallback extraction method');
-    
+
+    // Try to detect brand/trademark column from header
+    let brandColumnIndex = -1;
+    if (excelData.length > 0) {
+      const firstRow = excelData[0];
+      if (typeof firstRow === 'object' && firstRow !== null) {
+        const values = Object.values(firstRow);
+        const headerKeywords = ['商标', 'trademark', '品牌', 'brand', '名称', 'name', '查询商标', 'trademark name'];
+        
+        for (let i = 0; i < values.length; i++) {
+          const cellValue = String(values[i] || '').toLowerCase().trim();
+          if (headerKeywords.some(kw => cellValue.includes(kw.toLowerCase()))) {
+            brandColumnIndex = i;
+            logger.info('Detected brand column from header', { column: i, header: values[i] });
+            break;
+          }
+        }
+      }
+    }
+
+    // If brand column detected, extract from that column only
+    if (brandColumnIndex >= 0) {
+      const trademarks = [];
+      for (let i = 1; i < excelData.length; i++) { // Skip header row
+        const row = excelData[i];
+        if (typeof row === 'object' && row !== null) {
+          const values = Object.values(row);
+          if (values.length > brandColumnIndex) {
+            const value = String(values[brandColumnIndex] || '').trim();
+            if (value && this.isValidTrademark(value)) {
+              trademarks.push(value);
+            }
+          }
+        }
+      }
+      const unique = [...new Set(trademarks)];
+      logger.info('Extracted from detected column', { count: unique.length, column: brandColumnIndex });
+      return unique;
+    }
+
+    // Fallback to original logic if no header detected
     const trademarks = [];
     const headerKeywords = ['序号', '编号', 'id', 'no', '名称', 'name', '商标', 'trademark', '品牌', 'brand'];
     let isFirstRow = true;

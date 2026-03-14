@@ -299,7 +299,10 @@ const extractController = {
 
           logger.info('[DEBUG] Creating task in database', { taskId, batchIndex: i, trademarkCount: batchTrademarks.length });
           await taskDB.create(task);
-          logger.info('[DEBUG] Task created in database', { taskId });
+          logger.info('[DEBUG] Task created in database, adding to queue', { taskId });
+          
+          // Add task to Redis queue for processing
+          await addTaskToQueue(taskId, task.trademarks, task.priority);
           
           // Task created as paused, will be added to queue when user clicks start
           logger.info('[DEBUG] Task created as paused (waiting for user to start)', { taskId });
@@ -328,7 +331,10 @@ const extractController = {
 
         logger.info('[DEBUG] Creating single task in database', { taskId, trademarkCount: trademarks.length });
         await taskDB.create(task);
-        logger.info('[DEBUG] Single task created in database', { taskId });
+        logger.info('[DEBUG] Single task created in database, adding to queue', { taskId });
+        
+        // Add task to Redis queue for processing
+        await addTaskToQueue(taskId, task.trademarks, task.priority);
         
         // Task created as paused, will be added to queue when user clicks start
         logger.info('[DEBUG] Single task created as paused (waiting for user to start)', { taskId });

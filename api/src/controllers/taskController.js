@@ -123,9 +123,10 @@ const taskController = {
       createdAt: task.created_at,
       updatedAt: task.updated_at,
       progress: {
-        total: task.progress_total,
-        processed: task.progress_processed,
-        failed: task.progress_failed
+        // Ensure non-null values (schema has DEFAULT 0, but handle legacy data)
+        total: task.progress_total || 0,
+        processed: task.progress_processed || 0,
+        failed: task.progress_failed || 0
       }
     };
 

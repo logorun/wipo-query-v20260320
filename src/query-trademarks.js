@@ -2,6 +2,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const xlsx = require('xlsx');
+const { ProxyManager } = require('./utils/proxy-manager');
 
 // ==================== 配置区域 ====================
 const CONFIG = {
@@ -22,7 +23,20 @@ const CONFIG = {
   
   // 断点续传
   progressFile: path.join(__dirname, '..', 'output', 'progress.json'),
-  enableResume: true
+  enableResume: true,
+  
+  // 代理配置
+  proxy: {
+    enabled: true,                    // 是否启用代理
+    host: '23.148.244.2',             // 代理服务器IP
+    portStart: 10000,                 // 起始端口
+    portEnd: 10252,                   // 结束端口
+    protocol: 'socks5',               // 代理协议
+    strategy: 'round-robin',          // 轮换策略: round-robin, random, least-used
+    cooldownMs: 30000,                // 同一IP冷却时间(ms)
+    rotateOnRetry: true,              // 重试时是否切换代理
+    stateFile: path.join(__dirname, '..', 'output', 'proxy-state.json')
+  }
 };
 
 // 商标列表
@@ -37,12 +51,66 @@ const trademarks = [
 
 const outputDir = path.join(__dirname, '..', 'output');
 
+// ==================== 代理管理器初始化 ====================
+const proxyManager = new ProxyManager(CONFIG.proxy);
+
 // ==================== 工具函数 ====================
-function execAgent(cmd, timeout = 30000) {
+function execAgent(cmd, timeout = 30000, proxyInfo = null) {
   try {
-    return execSync(`agent-browser ${cmd}`, { encoding: 'utf-8', timeout });
+    // 如果没有指定proxyInfo，从管理器获取
+    if (CONFIG.proxy.enabled && !proxyInfo) {
+      const env = proxyManager.getProxyEnv();
+      proxyInfo = env.proxyInfo;
+    }
+    
+    // 构建环境变量
+    const env = { ...process.env };
+    if (proxyInfo && CONFIG.proxy.enabled) {
+      env.AGENT_BROWSER_PROXY = proxyInfo.url;
+    }
+    
+    const result = execSync(`agent-browser ${cmd}`, { 
+      encoding: 'utf-8', 
+      timeout,
+      env 
+    });
+    
+    // 记录成功
+    if (proxyInfo) {
+      proxyManager.markSuccess(proxyInfo.index);
+    }
+    
+    return result;
   } catch (e) {
+    // 记录失败
+    if (proxyInfo) {
+      proxyManager.markFailed(proxyInfo.index);
+    }
     return e.stdout || e.message || '';
+  }
+}
+
+// 带代理的查询执行（返回proxyInfo用于重试）
+function execAgentWithProxy(cmd, timeout = 30000) {
+  const env = proxyManager.getProxyEnv();
+  const proxyInfo = env.proxyInfo;
+  
+  try {
+    const result = execSync(`agent-browser ${cmd}`, { 
+      encoding: 'utf-8', 
+      timeout,
+      env: { ...process.env, ...env }
+    });
+    
+    proxyManager.markSuccess(proxyInfo?.index);
+    return { result, proxyInfo, success: true };
+  } catch (e) {
+    proxyManager.markFailed(proxyInfo?.index);
+    return { 
+      result: e.stdout || e.message || '', 
+      proxyInfo, 
+      success: false 
+    };
   }
 }
 
@@ -138,21 +206,33 @@ async function queryBrandDB(trademark, cache) {
   }
   
   let lastError = null;
+  let currentProxy = null;
   
   // 重试机制
   for (let attempt = 1; attempt <= CONFIG.retryAttempts; attempt++) {
     try {
+      // 获取新代理（每次尝试都获取新代理以实现轮换）
+      if (CONFIG.proxy.enabled) {
+        if (CONFIG.proxy.rotateOnRetry || attempt === 1) {
+          const env = proxyManager.getProxyEnv();
+          currentProxy = env.proxyInfo;
+          if (currentProxy) {
+            console.log(`   🌐 代理: ${currentProxy.ip}:${currentProxy.port}`);
+          }
+        }
+      }
+      
       if (attempt > 1) {
         console.log(`   🔄 第 ${attempt}/${CONFIG.retryAttempts} 次尝试...`);
         await sleep(CONFIG.retryDelay);
       }
       
       // 1. 打开 Brand Database Advanced Search
-      execAgent('open "https://branddb.wipo.int/en/advancedsearch" --json', 30000);
+      execAgent('open "https://branddb.wipo.int/en/advancedsearch" --json', 30000, currentProxy);
       await sleep(8000);
       
       // 2. 获取页面并填写表单
-      let snapshot = execAgent('snapshot', 15000);
+      let snapshot = execAgent('snapshot', 15000, currentProxy);
       
       // 查找 Brand name 输入框 (通常是第一个 textbox)
       const textboxMatch = snapshot.match(/textbox\s*\[ref=([e\d]+)\]/);
@@ -163,17 +243,17 @@ async function queryBrandDB(trademark, cache) {
       // 3. 输入品牌名称 (使用不带 @ 的 ref 格式)
       console.log(`     输入 Brand name: ${trademark}`);
       const textboxRef = textboxMatch[1].replace('@', '');
-      execAgent(`fill "${textboxRef}" "${trademark}"`, 10000);
+      execAgent(`fill "${textboxRef}" "${trademark}"`, 10000, currentProxy);
       await sleep(1000);
       
       // 4. 选择搜索策略为 "Match exact expression"
       // 使用 select 命令，ref 为 e39，值为 "is matching exact expression"
       console.log(`     选择搜索策略: Match exact expression`);
-      execAgent(`select "e39" "is matching exact expression"`, 10000);
+      execAgent(`select "e39" "is matching exact expression"`, 10000, currentProxy);
       await sleep(3000);
       
       // 验证选择
-      snapshot = execAgent('snapshot', 10000);
+      snapshot = execAgent('snapshot', 10000, currentProxy);
       if (snapshot.includes('is matching exact expression')) {
         console.log(`     ✅ 策略已切换为 exact expression`);
       } else {
@@ -182,12 +262,12 @@ async function queryBrandDB(trademark, cache) {
       
       // 5. 点击 Search 按钮 (使用 e10)
       console.log(`     点击 Search 按钮`);
-      execAgent(`click "e10"`, 10000);
+      execAgent(`click "e10"`, 10000, currentProxy);
       
       await sleep(15000); // 等待结果加载
       
       // 5. 获取结果
-      snapshot = execAgent('snapshot', 15000);
+      snapshot = execAgent('snapshot', 15000, currentProxy);
       
       // 验证搜索策略是否正确
       if (snapshot.includes('contains the word')) {
@@ -199,10 +279,10 @@ async function queryBrandDB(trademark, cache) {
       // 滚动查看更多结果
       console.log('   滚动查看更多结果...');
       for (let scroll = 0; scroll < 3; scroll++) {
-        execAgent('scroll down 800', 5000);
+        execAgent('scroll down 800', 5000, currentProxy);
         await sleep(3000);
       }
-      snapshot = execAgent('snapshot', 15000);
+      snapshot = execAgent('snapshot', 15000, currentProxy);
       
       // 6. 解析结果
       const results = parseResults(snapshot, trademark);
@@ -334,6 +414,11 @@ async function main() {
   console.log(`  - 重试次数: ${CONFIG.retryAttempts}`);
   console.log(`  - 缓存: ${CONFIG.enableCache ? '启用' : '禁用'}`);
   console.log(`  - 断点续传: ${CONFIG.enableResume ? '启用' : '禁用'}`);
+  console.log(`  - 代理轮换: ${CONFIG.proxy.enabled ? '启用' : '禁用'}`);
+  if (CONFIG.proxy.enabled) {
+    console.log(`    • 代理池: ${CONFIG.proxy.host}:${CONFIG.proxy.portStart}-${CONFIG.proxy.portEnd}`);
+    console.log(`    • 策略: ${CONFIG.proxy.strategy}`);
+  }
   console.log('');
   
   // 加载缓存和进度
@@ -455,6 +540,19 @@ async function main() {
   console.log(`  - 未找到: ${notFoundCount}`);
   console.log(`  - 查询错误: ${errorCount}`);
   console.log(`  - 来自缓存: ${cachedCount}`);
+  
+  // 代理统计
+  if (CONFIG.proxy.enabled) {
+    const proxyStats = proxyManager.getStats();
+    console.log(`\n🌐 代理统计:`);
+    console.log(`  - 总请求: ${proxyStats.requests.total}`);
+    console.log(`  - 成功: ${proxyStats.requests.successful}`);
+    console.log(`  - 失败: ${proxyStats.requests.failed}`);
+    console.log(`  - 成功率: ${proxyStats.requests.successRate}`);
+    if (proxyStats.topUsedProxies.length > 0) {
+      console.log(`  - 最常用代理: ${proxyStats.topUsedProxies.map(p => `${p.port}(${p.count})`).join(', ')}`);
+    }
+  }
   
   return { csvPath, excelPath, jsonPath };
 }

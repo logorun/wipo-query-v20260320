@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WIPO Production Monitor - REAL DATA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .glass {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .status-ok { color: #4ade80; }
+        .status-warning { color: #fbbf24; }
+        .status-error { color: #f87171; }
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        .refresh-indicator {
+            animation: rotate 1s linear infinite;
+        }
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen text-white">
+    <nav class="glass border-b border-white/10 px-6 py-4">
+        <div class="flex items-center justify-between max-w-7xl mx-auto">
+            <div class="flex items-center gap-3">
+                <h1 class="text-2xl font-bold">📊 WIPO 生产环境监控</h1>
+                <div class="pulse-dot"></div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="last-update" class="text-sm text-slate-400">-</span>
+                <button onclick="refreshAll()" id="refresh-btn" class="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg transition flex items-center gap-2">
+                    <span id="refresh-icon">🔄</span>
+                    <span>刷新</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+        <!-- Alert Banner -->
+        <div id="alert-banner" class="hidden glass rounded-xl p-4 bg-red-500/20 border-red-500/50">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl">⚠️</span>
+                <div>
+                    <h4 class="font-bold text-red-400">系统告警</h4>
+                    <p id="alert-message" class="text-sm text-red-300"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Overview -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">系统状态</h3>
+                <p id="system-status" class="text-2xl font-bold mt-2">-</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">Worker 实例</h3>
+                <p id="worker-count" class="text-2xl font-bold mt-2">-</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">代理池状态</h3>
+                <p id="proxy-status" class="text-2xl font-bold mt-2">-</p>
+            </div>
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-slate-400 text-sm">队列任务</h3>
+                <p id="queue-status" class="text-2xl font-bold mt-2">-</p>
+            </div>
+        </div>
+
+        <!-- Detailed Sections -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Worker Status -->
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-bold mb-4">👷 Worker 状态 (实时)</h3>
+                <div id="worker-list" class="space-y-2 max-h-60 overflow-y-auto">
+                    <p class="text-slate-400">加载中...</p>
+                </div>
+            </div>
+
+            <!-- Queue Progress -->
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-bold mb-4">📋 队列进度 (Redis实时)</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-slate-400">处理进度</span>
+                            <span id="queue-progress-text" class="text-sm">-</span>
+                        </div>
+                        <div class="w-full bg-slate-700 rounded-full h-3">
+                            <div id="queue-progress-bar" class="bg-blue-500 h-3 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-4 text-center">
+                        <div>
+                            <p class="text-2xl font-bold text-yellow-400" id="queue-waiting">-</p>
+                            <p class="text-xs text-slate-400">等待中</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-blue-400" id="queue-active">-</p>
+                            <p class="text-xs text-slate-400">处理中</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-green-400" id="queue-completed">-</p>
+                            <p class="text-xs text-slate-400">已完成</p>
+                        </div>
+                        <div>
+                            <p class="text-2xl font-bold text-red-400" id="queue-failed">-</p>
+                            <p class="text-xs text-slate-400">失败</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Proxy Pool Status -->
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-bold mb-4">🌐 代理池状态 (3proxy检测)</h3>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <p class="text-slate-400 text-sm">服务状态</p>
+                        <p id="proxy-service" class="text-xl font-bold">-</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-sm">可用代理</p>
+                        <p id="proxy-available" class="text-xl font-bold">-</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-sm">端口范围</p>
+                        <p id="proxy-ports" class="text-xl font-bold">10000-10252</p>
+                    </div>
+                    <div>
+                        <p class="text-slate-400 text-sm">轮换策略</p>
+                        <p id="proxy-strategy" class="text-xl font-bold">round-robin</p>
+                    </div>
+                </div>
+                <div id="proxy-tests" class="border-t border-white/10 pt-4">
+                    <p class="text-xs text-slate-400 mb-2">代理测试结果:</p>
+                    <div id="proxy-test-results" class="text-xs font-mono">-</div>
+                </div>
+            </div>
+
+            <!-- System Resources -->
+            <div class="glass rounded-xl p-6">
+                <h3 class="text-lg font-bold mb-4">💻 系统资源 (实时)</h3>
+                <div class="space-y-4">
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-slate-400">CPU 负载</span>
+                            <span id="cpu-usage" class="text-sm">-</span>
+                        </div>
+                        <div class="w-full bg-slate-700 rounded-full h-2">
+                            <div id="cpu-bar" class="bg-green-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-slate-400">内存使用率</span>
+                            <span id="memory-usage" class="text-sm">-</span>
+                        </div>
+                        <div class="w-full bg-slate-700 rounded-full h-2">
+                            <div id="memory-bar" class="bg-blue-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between mb-1">
+                            <span class="text-sm text-slate-400">磁盘使用率</span>
+                            <span id="disk-usage" class="text-sm">-</span>
+                        </div>
+                        <div class="w-full bg-slate-700 rounded-full h-2">
+                            <div id="disk-bar" class="bg-purple-500 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 grid grid-cols-3 gap-4 text-center border-t border-white/10 pt-4">
+                    <div>
+                        <p class="text-xl font-bold text-blue-400" id="mem-total">-</p>
+                        <p class="text-xs text-slate-400">总内存 (GB)</p>
+                    </div>
+                    <div>
+                        <p class="text-xl font-bold text-green-400" id="mem-available">-</p>
+                        <p class="text-xs text-slate-400">可用 (GB)</p>
+                    </div>
+                    <div>
+                        <p class="text-xl font-bold text-yellow-400" id="cpu-cores">-</p>
+                        <p class="text-xs text-slate-400">CPU核心</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Statistics -->
+        <div class="glass rounded-xl p-6">
+            <h3 class="text-lg font-bold mb-4">📊 任务统计 (数据库实时)</h3>
+            <div id="task-stats" class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <p class="text-slate-400">加载中...</p>
+            </div>
+        </div>
+
+        <!-- Data Verification -->
+        <div class="glass rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-bold">🔍 数据验证</h3>
+                <span class="text-xs text-slate-400">最后API调用: <span id="api-timestamp">-</span></span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono bg-black/20 p-4 rounded">
+                <div>
+                    <p class="text-slate-400 mb-1">PM2 进程数:</p>
+                    <p id="verify-pm2" class="text-green-400">-</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 mb-1">内存使用:</p>
+                    <p id="verify-memory" class="text-blue-400">-</p>
+                </div>
+                <div>
+                    <p class="text-slate-400 mb-1">队列状态:</p>
+                    <p id="verify-queue" class="text-yellow-400">-</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Raw Data (for debugging) -->
+        <details class="glass rounded-xl">
+            <summary class="p-4 cursor-pointer text-sm text-slate-400 hover:text-white">
+                📝 原始JSON数据 (调试用)
+            </summary>
+            <pre id="raw-data" class="text-xs text-slate-500 overflow-x-auto max-h-60 overflow-y-auto p-4"></pre>
+        </details>
+    </main>
+
+    <script>
+        const API_BASE = 'http://216.116.160.78:8081';
+        let refreshCount = 0;
+        
+        // Refresh all data
+        async function refreshAll() {
+            const refreshBtn = document.getElementById('refresh-btn');
+            const refreshIcon = document.getElementById('refresh-icon');
+            
+            refreshIcon.textContent = '⏳';
+            refreshIcon.classList.add('refresh-indicator');
+            document.getElementById('last-update').textContent = '刷新中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/status`);
+                const data = await response.json();
+                
+                refreshCount++;
+                
+                // Update timestamps
+                const now = new Date(data.timestamp);
+                document.getElementById('last-update').textContent = 
+                    `最后更新: ${now.toLocaleTimeString('zh-CN')} (第${refreshCount}次)`;
+                document.getElementById('api-timestamp').textContent = data.timestamp;
+                
+                // Show raw data for debugging
+                document.getElementById('raw-data').textContent = JSON.stringify(data, null, 2);
+                
+                // Update all sections
+                updateSystemStatus(data);
+                updateWorkerStatus(data.pm2);
+                updateProxyStatus(data.proxy);
+                updateQueueStatus(data.queue);
+                updateTaskStats(data.tasks);
+                updateSystemResources(data.system);
+                updateVerification(data);
+                
+            } catch (error) {
+                console.error('Refresh error:', error);
+                document.getElementById('system-status').innerHTML = 
+                    '<span class="status-error">❌ 连接失败</span>';
+                document.getElementById('last-update').textContent = '连接失败';
+                showAlert('无法连接监控服务: ' + error.message);
+            } finally {
+                refreshIcon.textContent = '🔄';
+                refreshIcon.classList.remove('refresh-indicator');
+            }
+        }
+
+        // Update system status
+        function updateSystemStatus(data) {
+            const statusEl = document.getElementById('system-status');
+            
+            const pm2 = data.pm2;
+            const allOnline = Array.isArray(pm2) && pm2.every(p => p.status === 'online');
+            const queueOk = data.queue && data.queue.status !== 'error';
+            
+            if (allOnline && queueOk) {
+                statusEl.innerHTML = '<span class="status-ok">✅ 正常</span>';
+            } else if (allOnline) {
+                statusEl.innerHTML = '<span class="status-warning">⚠️ 部分异常</span>';
+            } else {
+                statusEl.innerHTML = '<span class="status-error">❌ 异常</span>';
+            }
+        }
+
+        // Update worker status
+        function updateWorkerStatus(pm2Data) {
+            const workerList = document.getElementById('worker-list');
+            const workerCountEl = document.getElementById('worker-count');
+            
+            if (!Array.isArray(pm2Data)) {
+                workerList.innerHTML = '<p class="text-slate-400">获取失败</p>';
+                workerCountEl.innerHTML = '<span class="status-error">错误</span>';
+                return;
+            }
+            
+            const workers = pm2Data.filter(p => p.name.includes('worker'));
+            const onlineCount = workers.filter(w => w.status === 'online').length;
+            
+            workerCountEl.innerHTML = `<span class="${onlineCount === workers.length ? 'status-ok' : 'status-warning'}">${onlineCount}/${workers.length} 在线</span>`;
+            
+            workerList.innerHTML = pm2Data.map(w => {
+                const uptimeMin = Math.floor(w.uptime / 60);
+                const uptimeStr = uptimeMin > 60 ? `${Math.floor(uptimeMin/60)}h${uptimeMin%60}m` : `${uptimeMin}m`;
+                return `
+                    <div class="flex items-center justify-between p-2 bg-white/5 rounded">
+                        <div>
+                            <span class="font-medium">${w.name}</span>
+                            <span class="text-xs text-slate-400 ml-2">运行 ${uptimeStr}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="${w.status === 'online' ? 'status-ok' : 'status-error'}">${w.status}</span>
+                            <span class="text-xs text-slate-400 ml-2">${w.memory}MB | ${w.cpu}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Update proxy status
+        function updateProxyStatus(proxyData) {
+            if (!proxyData) return;
+            
+            document.getElementById('proxy-service').textContent = proxyData.serviceStatus || '-';
+            document.getElementById('proxy-available').textContent = proxyData.availableProxies || 0;
+            document.getElementById('proxy-ports').textContent = proxyData.portRange || '-';
+            document.getElementById('proxy-strategy').textContent = proxyData.strategy || '-';
+            
+            const proxyStatusEl = document.getElementById('proxy-status');
+            if (proxyData.status === 'online') {
+                proxyStatusEl.innerHTML = '<span class="status-ok">✅ 在线</span>';
+            } else if (proxyData.status === 'degraded') {
+                proxyStatusEl.innerHTML = '<span class="status-warning">⚠️ 降级</span>';
+            } else {
+                proxyStatusEl.innerHTML = '<span class="status-error">❌ 离线</span>';
+            }
+            
+            // Show test results
+            if (proxyData.testedProxies && proxyData.testedProxies.length > 0) {
+                const testResults = document.getElementById('proxy-test-results');
+                testResults.innerHTML = proxyData.testedProxies.map(p => 
+                    `<span class="${p.status === 'online' ? 'text-green-400' : 'text-red-400'}">
+                        :${p.port} ${p.status} ${p.responseTime ? p.responseTime + 'ms' : ''}
+                    </span>`
+                ).join(' | ');
+            }
+        }
+
+        // Update queue status
+        function updateQueueStatus(queueData) {
+            if (!queueData) return;
+            
+            const waiting = queueData.waiting || 0;
+            const active = queueData.active || 0;
+            const completed = queueData.completed || 0;
+            const failed = queueData.failed || 0;
+            const total = queueData.total || (waiting + active + completed + failed);
+            
+            document.getElementById('queue-waiting').textContent = waiting;
+            document.getElementById('queue-active').textContent = active;
+            document.getElementById('queue-completed').textContent = completed;
+            document.getElementById('queue-failed').textContent = failed;
+            
+            const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
+            document.getElementById('queue-progress-text').textContent = `${completed}/${total} (${progress}%)`;
+            document.getElementById('queue-progress-bar').style.width = `${progress}%`;
+            
+            const queueStatusEl = document.getElementById('queue-status');
+            if (queueData.status === 'online') {
+                queueStatusEl.textContent = active > 0 ? `${active} 处理中` : '空闲';
+            } else {
+                queueStatusEl.innerHTML = '<span class="status-error">离线</span>';
+            }
+        }
+
+        // Update task stats
+        function updateTaskStats(taskData) {
+            const container = document.getElementById('task-stats');
+            
+            if (!taskData || taskData.error) {
+                container.innerHTML = `<p class="text-slate-400">${taskData?.error || '无数据'}</p>`;
+                return;
+            }
+            
+            container.innerHTML = `
+                <div class="text-center p-3 bg-white/5 rounded">
+                    <p class="text-2xl font-bold text-yellow-400">${taskData.pending || 0}</p>
+                    <p class="text-xs text-slate-400">待处理</p>
+                </div>
+                <div class="text-center p-3 bg-white/5 rounded">
+                    <p class="text-2xl font-bold text-blue-400">${taskData.processing || 0}</p>
+                    <p class="text-xs text-slate-400">处理中</p>
+                </div>
+                <div class="text-center p-3 bg-white/5 rounded">
+                    <p class="text-2xl font-bold text-green-400">${taskData.completed || 0}</p>
+                    <p class="text-xs text-slate-400">已完成</p>
+                </div>
+                <div class="text-center p-3 bg-white/5 rounded">
+                    <p class="text-2xl font-bold text-red-400">${taskData.failed || 0}</p>
+                    <p class="text-xs text-slate-400">失败</p>
+                </div>
+                <div class="text-center p-3 bg-white/5 rounded">
+                    <p class="text-2xl font-bold text-purple-400">${taskData.total || 0}</p>
+                    <p class="text-xs text-slate-400">总计</p>
+                </div>
+            `;
+        }
+
+        // Update system resources
+        function updateSystemResources(systemData) {
+            if (!systemData || systemData.error) {
+                console.error('System data error:', systemData?.error);
+                return;
+            }
+            
+            const memory = systemData.memory;
+            const cpu = systemData.cpu;
+            const disk = systemData.disk;
+            
+            // Memory
+            if (memory) {
+                const memPercent = memory.percent || 0;
+                document.getElementById('memory-usage').textContent = `${memPercent}%`;
+                document.getElementById('memory-bar').style.width = `${memPercent}%`;
+                document.getElementById('memory-bar').className = 
+                    `h-2 rounded-full transition-all ${memPercent > 80 ? 'bg-red-500' : memPercent > 60 ? 'bg-yellow-500' : 'bg-blue-500'}`;
+                
+                document.getElementById('mem-total').textContent = (memory.total / 1024).toFixed(1);
+                document.getElementById('mem-available').textContent = (memory.available / 1024).toFixed(1);
+            }
+            
+            // CPU
+            if (cpu) {
+                const cpuLoad = cpu.load || 0;
+                const cpuPercent = Math.min(100, Math.round((cpuLoad / cpu.cores) * 100));
+                document.getElementById('cpu-usage').textContent = `负载 ${cpuLoad.toFixed(2)}`;
+                document.getElementById('cpu-bar').style.width = `${cpuPercent}%`;
+                document.getElementById('cpu-bar').className = 
+                    `h-2 rounded-full transition-all ${cpuPercent > 80 ? 'bg-red-500' : cpuPercent > 60 ? 'bg-yellow-500' : 'bg-green-500'}`;
+                document.getElementById('cpu-cores').textContent = cpu.cores;
+            }
+            
+            // Disk
+            if (disk) {
+                const diskPercent = disk.percent || 0;
+                document.getElementById('disk-usage').textContent = `${diskPercent}%`;
+                document.getElementById('disk-bar').style.width = `${diskPercent}%`;
+                document.getElementById('disk-bar').className = 
+                    `h-2 rounded-full transition-all ${diskPercent > 90 ? 'bg-red-500' : diskPercent > 70 ? 'bg-yellow-500' : 'bg-purple-500'}`;
+            }
+        }
+
+        // Update verification section
+        function updateVerification(data) {
+            const pm2Count = Array.isArray(data.pm2) ? data.pm2.length : 0;
+            const memPercent = data.system?.memory?.percent || 0;
+            const queueStatus = data.queue?.status || 'unknown';
+            
+            document.getElementById('verify-pm2').textContent = `${pm2Count} 进程运行中`;
+            document.getElementById('verify-memory').textContent = `${memPercent}% 已使用`;
+            document.getElementById('verify-queue').textContent = `Redis: ${queueStatus}`;
+        }
+
+        // Show alert
+        function showAlert(message) {
+            const banner = document.getElementById('alert-banner');
+            document.getElementById('alert-message').textContent = message;
+            banner.classList.remove('hidden');
+            
+            setTimeout(() => {
+                banner.classList.add('hidden');
+            }, 10000);
+        }
+
+        // Auto-refresh every 10 seconds
+        setInterval(refreshAll, 10000);
+
+        // Initial load
+        refreshAll();
+    </script>
+</body>
+</html>

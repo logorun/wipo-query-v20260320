@@ -489,7 +489,7 @@ async function startProcessing() {
 }
 
 async function processWithSSE(data, fileName, options) {
-    const API_BASE = 'http://95.134.250.48:3000/api/v1';
+    const API_BASE = 'http://216.116.160.78:8002/api/v1';
     const API_KEY = 'logotestkey';
     
     console.log('[DEBUG] processWithSSE starting', { fileName, dataLength: data.length, options });

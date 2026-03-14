@@ -51,5 +51,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`Dashboard server running at http://${HOST}:${PORT}`);
-  console.log(`Public access: http://95.134.250.48:${PORT}`);
+  console.log(`Public access: http://216.116.160.78:${PORT}`);
 });

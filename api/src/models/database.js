@@ -153,8 +153,8 @@ const taskDB = {
     
     try {
       const result = await run(`
-        INSERT INTO tasks (id, trademarks, status, priority, callback_url, progress_total, user_id, org_id, plan_type)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (id, trademarks, status, priority, callback_url, progress_total, progress_processed, progress_failed, user_id, org_id, plan_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         id, 
         JSON.stringify(trademarks), 
@@ -162,6 +162,8 @@ const taskDB = {
         priority, 
         callbackUrl || null, 
         trademarks.length,
+        0,  // progress_processed initialized to 0
+        0,  // progress_failed initialized to 0
         userId || null,
         orgId || null,
         planType || 'free'
